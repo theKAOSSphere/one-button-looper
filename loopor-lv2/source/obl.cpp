@@ -1,7 +1,7 @@
 //
 // MIT License
 //
-// Copyright 2018 Stevie <modplugins@radig.com>
+// Copyright 2018 Stevie <thekaossphere@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -40,7 +40,7 @@
 //
 
 /// URI which identifies the plugin
-static const char* LOOPER_URI = "http://radig.com/plugins/loopor";
+static const char* LOOPER_URI = "https://github.com/theKAOSSphere/one-button-looper/";
 /// The maximum number of dubs that can be recorded
 static const size_t NR_OF_DUBS = 128;
 /// The maximum number of seconds which can be recorded for all dubs.
@@ -75,7 +75,11 @@ typedef enum
     // The looper is recording a dub.
     LOOPER_STATE_RECORDING,
     // The looper is still playing all the active dubs.
-    LOOPER_STATE_PLAYING
+    LOOPER_STATE_PLAYING,
+    // The looper is overdubbing
+    LOOPER_STATE_OVERDUBBING,
+    // The loooper is clearing
+    LOOPER_STATE_CLEARING
 } State;
 
 ///
@@ -93,16 +97,8 @@ enum PortIndex
     LOOPER_OUTPUT2 = 3,
     /// Threshold parameter
     LOOPER_THRESHOLD = 4,
-    /// Activate button
+    /// The only button
     LOOPER_ACTIVATE = 5,
-    /// Reset button
-    LOOPER_RESET = 6,
-    /// Undo button
-    LOOPER_UNDO = 7,
-    /// Redo button
-    LOOPER_REDO = 8,
-    /// Dub button
-    LOOPER_DUB = 9,
     /// Amount of the dry signal in the output
     LOOPER_DRY_AMOUNT = 10,
     /// Select if dub ends at end of loop
@@ -136,7 +132,7 @@ class MomentaryButton
 {
 public:
     // Connect the button to an input and set the callback.
-    void connect(void* input, std::function<void (bool, double, bool)> callback)
+    void connect(void* input, std::function<void (bool, double, bool, bool)> callback)
     {
         m_input = static_cast<const float*>(input);
         m_callback = callback;
@@ -153,24 +149,57 @@ public:
 
         bool state = (*m_input) > 0.0f ? true : false;
         if (state == m_lastState)
+        {
+            // Check for long press
+            if (state && (now - m_pressStartTime >= m_longPressDuration))
+            {
+                if (!isHolding)
+                {
+                    isHolding = true;
+                    m_callback(true, now - m_lastChangeTime, doubleClick, isHolding); // Long press
+                }
+            }
             return;
+        }
+
+        // State change detected
         m_lastState = state;
-        bool doubleClick = false;
         if (state)
         {
-            if (now - m_lastClickTime < 1)
-                doubleClick = true;
-            m_lastClickTime = now;
+            // Button pressed
+            m_pressStartTime = now;
+            m_callback(true, 0, doubleClick, isHolding); // Short press begins
         }
-        m_callback(state, now - m_lastChangeTime, doubleClick);
+        else
+        {
+            // Button released
+            if (isHolding)
+            {
+                isHolding = false; // Reset holding state
+            }
+            else
+            {
+                // Normal button release
+                m_callback(false, now - m_lastChangeTime, doubleClick, isHolding);
+            }
+        }
         m_lastChangeTime = now;
+
+        // Detect double click
+        if (state && (now - m_lastClickTime < 1))
+        {
+            doubleClick = true;
+            m_callback(true, now - m_lastChangeTime, doubleClick, isHolding); // Double click
+        }
+        m_lastClickTime = now;
     }
 
     /// The callback
     /// \param bool pressed Is the button pressed or released?
     /// \param double How long since the last state change?
     /// \param doubleClick Was this pressed twice within a second?
-    std::function<void (bool, double, bool)> m_callback;
+    /// \param isHolding Was the button held?
+    std::function<void (bool, double, bool, bool)> m_callback;
     /// The input it is connected to.
     const float* m_input = NULL;
     /// The last state, used for supressing multiple callbacks.
@@ -179,7 +208,16 @@ public:
     double m_lastChangeTime = 0;
     /// Used for detecting double clicks.
     double m_lastClickTime = 0;
+    /// When the button press was started
+    double m_pressStartTime = 0;
+    /// Duration after which it's considered long press
+    double m_longPressDuration = 0.5;
+    /// Whether it's a double-click
+    bool doubleClick = false;
+    /// Whether button was held
+    bool isHolding = false;
 };
+
 
 ///
 /// The looper class
@@ -225,83 +263,52 @@ public:
             case LOOPER_OUTPUT2: m_output2 = (float*)data; return;
             case LOOPER_THRESHOLD: m_thresholdParameter = (const float*)data; return;
             case LOOPER_DRY_AMOUNT: m_dryAmountParameter = (const float*)data; return;
-            case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return;
+            case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)1; return; // Set it to ON by default?
+            // Connect the button
+            case LOOPER_BUTTON: 
+                m_button.connect(data, [this](bool pressed, double interval, bool doubleClick, bool isHolding)
+                {
+                    if (!pressed)
+                        return;
+                    if (pressed)
+                    {
+                        // If pressed when recording or waiting, stop recording
+                        if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
+                            finishRecording();
+                        // If pressed when playing, start overdubbing
+                        else if (m_state == LOOPER_STATE_PLAYING)
+                        {
+                            startRecording();
+                            m_state == LOOPER_STATE_OVERDUBBING;
+                        }
+                        // If looper is overdubbing
+                        else if (m_state == LOOPER_STATE_OVERDUBBING)
+                        {
+                            // If held while overdubbing, undo overdub
+                            if (isHolding)
+                                undo();
+                            // Else redo dub
+                            else
+                                redo();
+                        }
+                        // If just pressed, start recording
+                        else
+                            startRecording();
+                    }
+                    else
+                    {
+                        if (doubleClick)
+                        {
+                            reset();
+                        }
+                        isHolding = false; // Reset holding state on release
+                    }
+                });
+                return;
             default: break;
-        }
-
-        // Install the buttons and set their callback functions.
-        if (port == LOOPER_ACTIVATE)
-        {
-            m_activateButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-                if (!pressed)
-                    return;
-                if (doubleClick)
-                {
-                    reset();
-                    return;
-                }
-
-                if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
-                    finishRecording();
-                else
-                    startRecording();
-            });
-        }
-        else if (port == LOOPER_RESET)
-        {
-            m_resetButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-                if (!pressed)
-                    return;
-                if (doubleClick)
-                {
-                    reset();
-                    return;
-                }
-
-                if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
-                    finishRecording();
-                else
-                    undo();
-            });
-        }
-        else if (port == LOOPER_UNDO)
-        {
-            m_undoButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-                if (!pressed)
-                    return;
-                undo();
-            });
-        }
-        else if (port == LOOPER_REDO)
-        {
-            m_redoButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-                if (!pressed)
-                    return;
-                redo();
-            });
-        }
-        else if (port == LOOPER_DUB)
-        {
-            m_dubButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-               if (!pressed)
-                    return;
-                if (doubleClick)
-                {
-                    reset();
-                    return;
-                }
-
-                if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
-                    finishRecording();
-                startRecording();
-            });
-        }
+        }       
     }
+        
 
     /// Run the looper. Called for a bunch of samples at a time. Parameters will not change within this
     /// call!
@@ -390,6 +397,7 @@ public:
                         // actually stop recording dubs until the user clicks the
                         // button again.
                         startRecording();
+                        is_Overdubbing = true;
                     }
                 }
             }
@@ -410,16 +418,8 @@ private:
     /// Continuous dub mode parameter
     const float* m_continuousDubParameter = NULL;
     
-    /// Activate button
-    MomentaryButton m_activateButton;
-    /// Reset button
-    MomentaryButton m_resetButton;
-    /// Undo button
-    MomentaryButton m_undoButton;
-    /// Redo button
-    MomentaryButton m_redoButton;
-    /// Dub button
-    MomentaryButton m_dubButton;
+    /// Da only button
+    MomentaryButton m_button;
 
     //
     // All audio inputs
@@ -482,6 +482,10 @@ private:
     /// The dubs
     Dub m_dubs[NR_OF_DUBS];
 
+    bool m_isHolding = false;
+    bool m_isOverdubbing = false;
+    bool m_continuousDubbing; // Default to ON
+
     /// If we want to log to a file, we can use this.
     FILE* m_logFile = NULL;
 
@@ -503,6 +507,10 @@ private:
         fflush(m_logFile);
     }
 
+    void handleButtonPress(bool pressed, double interval)
+    {
+        
+    
     /// Reset everything to initial state.
     void reset()
     {
@@ -643,11 +651,7 @@ private:
     {
         m_threshold = dbToFloat(*m_thresholdParameter);
         m_dryAmount = *m_dryAmountParameter;
-        m_activateButton.run(m_now);
-        m_resetButton.run(m_now);
-        m_undoButton.run(m_now);
-        m_redoButton.run(m_now);
-        m_dubButton.run(m_now);
+        m_button.run(m_now);
     }
 };
 
