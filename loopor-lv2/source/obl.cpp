@@ -98,11 +98,11 @@ enum PortIndex
     /// Threshold parameter
     LOOPER_THRESHOLD = 4,
     /// The only button
-    LOOPER_ACTIVATE = 5,
+    LOOPER_BUTTON = 5,
     /// Amount of the dry signal in the output
-    LOOPER_DRY_AMOUNT = 10,
+    LOOPER_DRY_AMOUNT = 6,
     /// Select if dub ends at end of loop
-    LOOPER_CONTINUOUS_DUB = 11,
+    LOOPER_CONTINUOUS_DUB = 7,
 };
 
 ///
