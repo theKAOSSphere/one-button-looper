@@ -4,10 +4,10 @@
 <https://github.com/theKAOSSphere/one-button-looper/>
     modgui:gui [
         modgui:resourcesDirectory <modgui> ;
-        modgui:iconTemplate <modgui/icon-loopor.html> ;
-        modgui:stylesheet <modgui/stylesheet-loopor.css> ;
-        modgui:screenshot <modgui/screenshot-loopor.png> ;
-        modgui:thumbnail <modgui/thumbnail-loopor.png> ;
+        modgui:iconTemplate <modgui/icon-obl.html> ;
+        modgui:stylesheet <modgui/stylesheet-obl.css> ;
+        modgui:screenshot <modgui/screenshot-obl.png> ;
+        modgui:thumbnail <modgui/thumbnail-obl.png> ;
         modgui:brand "KAOSS" ;
         modgui:label "One-Button Looper" ;
         modgui:model "boxy" ;
