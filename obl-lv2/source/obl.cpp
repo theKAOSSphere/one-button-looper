@@ -40,7 +40,7 @@
 //
 
 /// URI which identifies the plugin
-static const char* LOOPER_URI = "https://github.com/theKAOSSphere/one-button-looper/";
+static constexpr const char* LOOPER_URI = "http://github.com/theKAOSSphere/one-button-looper/";
 /// The maximum number of dubs that can be recorded
 static const size_t NR_OF_DUBS = 128;
 /// The maximum number of seconds which can be recorded for all dubs.
@@ -279,7 +279,7 @@ public:
                         else if (m_state == LOOPER_STATE_PLAYING)
                         {
                             startRecording();
-                            m_state == LOOPER_STATE_OVERDUBBING;
+                            m_state = LOOPER_STATE_OVERDUBBING;
                         }
                         // If looper is overdubbing
                         else if (m_state == LOOPER_STATE_OVERDUBBING)
@@ -397,7 +397,7 @@ public:
                         // actually stop recording dubs until the user clicks the
                         // button again.
                         startRecording();
-                        is_Overdubbing = true;
+                        m_isOverdubbing = true;
                     }
                 }
             }
