@@ -507,10 +507,6 @@ private:
         fflush(m_logFile);
     }
 
-    void handleButtonPress(bool pressed, double interval)
-    {
-        
-    
     /// Reset everything to initial state.
     void reset()
     {
