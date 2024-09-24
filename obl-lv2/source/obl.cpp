@@ -40,7 +40,7 @@
 //
 
 /// URI which identifies the plugin
-static constexpr const char* LOOPER_URI = "http://github.com/theKAOSSphere/one-button-looper";
+static constexpr const char* LOOPER_URI = "https://github.com/theKAOSSphere/one-button-looper";
 /// The maximum number of dubs that can be recorded
 static const size_t NR_OF_DUBS = 128;
 /// The maximum number of seconds which can be recorded for all dubs.
