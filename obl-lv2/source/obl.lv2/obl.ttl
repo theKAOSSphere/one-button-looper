@@ -5,6 +5,7 @@
 @prefix pprops: <http://lv2plug.in/ns/ext/port-props#>.
 @prefix units: <http://lv2plug.in/ns/extensions/units#> .
 @prefix mod:   <http://moddevices.com/ns/mod#> .
+@prefix foaf:  <http://xmlns.com/foaf/0.1/> .
 
 <https://github.com/theKAOSSphere/one-button-looper>
 	a lv2:Plugin, lv2:UtilityPlugin;
