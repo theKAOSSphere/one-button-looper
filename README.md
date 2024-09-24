@@ -9,10 +9,10 @@ Features:
 * Stereo inputs and outputs
 * Compiled in max number of overdubs (currently 128), a compiled max overall recording time (currently 6 minutes)
 * Configurable input threshold; when starting the recording it can wait until a certain threshold is reached.
-* Record / Play, Undo, Redo, Reset and Dub buttons
-* No clicks even when sounds is still playing at loop end
-* Configurable amount of dry signal routed to the outputs (added in version 4)
-* Optionally after first dub continue recording (added in version 5, thanks to ssj71)
+* Just one button to control all functions, saving switching real estate!
+* No clicks even when sounds is still playing at loop end.
+* Configurable amount of dry signal routed to the outputs.
+* Optionally after first dub continue recording.
 
 
 Usage:
