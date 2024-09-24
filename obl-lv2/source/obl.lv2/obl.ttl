@@ -73,4 +73,23 @@
 			lv2:minimum 0.0;
 			lv2:maximum 1.0;
 			lv2:portProperty lv2:integer, lv2:toggled;
-		]  .
+		]  ;
+    rdfs:comment  """
+One-Button Looper is a simple looper plugin with only one button. It mimics the working of the 
+TC Electronic Ditto looper pedal.
+
+""";
+
+mod:brand "KAOSS" ;
+    mod:label "One-Button Looper" ;
+
+    doap:name "One-Button Looper" ;
+    doap:license <https://opensource.org/license/mit> ;
+
+    doap:maintainer [
+        foaf:name "KAOSS" ;
+        foaf:homepage <https://github.com/theKAOSSphere/one-button-looper> ;
+    ] ;
+
+    lv2:microVersion 0 ;
+    lv2:minorVersion 1 .
