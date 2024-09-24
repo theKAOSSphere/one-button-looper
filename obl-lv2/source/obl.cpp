@@ -78,7 +78,7 @@ typedef enum
     LOOPER_STATE_PLAYING,
     // The looper is overdubbing
     LOOPER_STATE_OVERDUBBING,
-    // The loooper is clearing
+    // The looper is clearing
     LOOPER_STATE_CLEARING
 } State;
 
@@ -263,7 +263,7 @@ public:
             case LOOPER_OUTPUT2: m_output2 = (float*)data; return;
             case LOOPER_THRESHOLD: m_thresholdParameter = (const float*)data; return;
             case LOOPER_DRY_AMOUNT: m_dryAmountParameter = (const float*)data; return;
-            case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)1; return; // Set it to ON by default?
+            case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return; // Set it to ON by default?
             // Connect the button
             case LOOPER_BUTTON: 
                 m_button.connect(data, [this](bool pressed, double interval, bool doubleClick, bool isHolding)
