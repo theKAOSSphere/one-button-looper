@@ -24,7 +24,7 @@ build: obl.lv2/obl$(LIB_EXT) obl.lv2/manifest.ttl
 obl.lv2/obl$(LIB_EXT): obl.cpp
 	$(CXX) $^ $(BUILD_CXX_FLAGS) $(LINK_FLAGS) -lm $(SHARED) -o $@
 
-obl.lv2/manifest.ttl: obl.lv2/manifest.ttl.in
+obl.lv2/manifest.ttl: obl.lv2/manifest.ttl
 	sed -e "s|@LIB_EXT@|$(LIB_EXT)|" $< > $@
 
 # --------------------------------------------------------------
