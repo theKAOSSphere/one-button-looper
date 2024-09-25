@@ -252,7 +252,7 @@ public:
                     if (pressed)
                     {
                         // If pressed when recording or waiting, stop recording
-                        if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
+                        if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD || m_state == LOOPER_STATE_OVERDUBBING)
                         {
                             finishRecording();
                             m_state = LOOPER_STATE_PLAYING; // Transition to playing state
