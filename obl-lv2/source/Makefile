@@ -17,28 +17,28 @@ DESTDIR ?=
 all: build
 
 # --------------------------------------------------------------
-# obl build rules
+# kaoss_obl build rules
 
-build: obl.lv2/obl$(LIB_EXT) obl.lv2/manifest.ttl
+build: kaoss_obl.lv2/kaoss_obl$(LIB_EXT) kaoss_obl.lv2/manifest.ttl
 
-obl.lv2/obl$(LIB_EXT): obl.cpp
+kaoss_obl.lv2/kaoss_obl$(LIB_EXT): obl.cpp
 	$(CXX) $^ $(BUILD_CXX_FLAGS) $(LINK_FLAGS) -lm $(SHARED) -o $@
 
-obl.lv2/manifest.ttl: obl.lv2/manifest.ttl
+kaoss_obl.lv2/manifest.ttl: kaoss_obl.lv2/manifest.ttl
 	sed -e "s|@LIB_EXT@|$(LIB_EXT)|" $< > $@
 
 # --------------------------------------------------------------
 
 clean:
-	rm -f obl.lv2/obl$(LIB_EXT) obl.lv2/manifest.ttl
+	rm -f kaoss_obl.lv2/kaoss_obl$(LIB_EXT) kaoss_obl.lv2/manifest.ttl
 
 # --------------------------------------------------------------
 
 install: build
-	install -d $(DESTDIR)$(PREFIX)/lib/lv2/obl.lv2
+	install -d $(DESTDIR)$(PREFIX)/lib/lv2/kaoss_obl.lv2
 
-	install -m 644 obl.lv2/*.so  $(DESTDIR)$(PREFIX)/lib/lv2/obl.lv2/
-	install -m 644 obl.lv2/*.ttl $(DESTDIR)$(PREFIX)/lib/lv2/obl.lv2/
-	cp -r obl.lv2/modgui $(DESTDIR)$(PREFIX)/lib/lv2/obl.lv2/
+	install -m 644 kaoss_obl.lv2/*.so  $(DESTDIR)$(PREFIX)/lib/lv2/kaoss_obl.lv2/
+	install -m 644 kaoss_obl.lv2/*.ttl $(DESTDIR)$(PREFIX)/lib/lv2/kaoss_obl.lv2/
+	cp -r kaoss_obl.lv2/modgui $(DESTDIR)$(PREFIX)/lib/lv2/kaoss_obl.lv2/
 
 # --------------------------------------------------------------
