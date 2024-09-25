@@ -2,5 +2,5 @@
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 <https://github.com/theKAOSSphere/one-button-looper> a lv2:Plugin .
-<https://github.com/theKAOSSphere/one-button-looper> lv2:binary <obl.so> .
-<https://github.com/theKAOSSphere/one-button-looper> rdfs:seeAlso <obl.ttl>, <modgui.ttl> .
+<https://github.com/theKAOSSphere/one-button-looper> lv2:binary <kaoss_obl.so> .
+<https://github.com/theKAOSSphere/one-button-looper> rdfs:seeAlso <kaoss_obl.ttl>, <modgui.ttl> .
