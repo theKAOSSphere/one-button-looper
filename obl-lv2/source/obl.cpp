@@ -268,40 +268,63 @@ public:
             case LOOPER_BUTTON: 
                 m_button.connect(data, [this](bool pressed, double interval, bool doubleClick, bool isHolding)
                 {
-                    if (!pressed)
+                    if (doubleClick)
+                    {
+                        // Double click to reset, this should override other actions
+                        reset();
                         return;
+                    }
+                
                     if (pressed)
                     {
                         // If pressed when recording or waiting, stop recording
                         if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
+                        {
                             finishRecording();
+                            m_state = LOOPER_STATE_PLAYING; // Transition to playing state
+                        }
                         // If pressed when playing, start overdubbing
                         else if (m_state == LOOPER_STATE_PLAYING)
                         {
-                            startRecording();
+                            startRecording(); // Start overdubbing
                             m_state = LOOPER_STATE_OVERDUBBING;
                         }
                         // If looper is overdubbing
                         else if (m_state == LOOPER_STATE_OVERDUBBING)
                         {
-                            // If held while overdubbing, undo overdub
+                            // If long press while overdubbing, undo overdub
                             if (isHolding)
+                            {
                                 undo();
-                            // Else redo dub
+                                m_state = LOOPER_STATE_PLAYING; // Return to playing state after undo
+                            }
                             else
-                                redo();
+                            {
+                                // Stop overdubbing
+                                finishRecording();
+                                m_state = LOOPER_STATE_PLAYING;
+                            }
                         }
-                        // If just pressed, start recording
+                        // If looper is idle, start recording
                         else
+                        {
                             startRecording();
+                            m_state = LOOPER_STATE_RECORDING;
+                        }
                     }
                     else
                     {
-                        if (doubleClick)
+                        if (!isHolding)
                         {
-                            reset();
+                            // On button release, if not holding, stop recording/overdubbing
+                            if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_OVERDUBBING)
+                            {
+                                finishRecording();
+                                m_state = LOOPER_STATE_PLAYING;
+                            }
                         }
-                        isHolding = false; // Reset holding state on release
+                        // Reset holding state on release
+                        isHolding = false;
                     }
                 });
                 return;
