@@ -181,6 +181,7 @@ public:
             if (isHolding)
             {
                 isHolding = false; // Reset holding state
+                m_callback(false, now - m_lastChangeTime, doubleClick, isHolding);
             }
             else
             {
