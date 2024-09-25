@@ -150,7 +150,7 @@ public:
         bool state = (*m_input) > 0.0f ? true : false;
         if (state == m_lastState)
         {
-            // Check for long press
+            // Check for long press and double click
             if (state && (now - m_pressStartTime >= m_longPressDuration))
             {
                 if (!isHolding)
@@ -158,6 +158,11 @@ public:
                     isHolding = true;
                     m_callback(true, now - m_lastChangeTime, doubleClick, isHolding); // Long press
                 }
+            }
+            else if (state && (now - m_lastClickTime < 1))
+            {
+                doubleClick = true;
+                m_callback(true, now - m_lastChangeTime, doubleClick, isHolding); // Double click
             }
             return;
         }
@@ -184,14 +189,6 @@ public:
             }
         }
         m_lastChangeTime = now;
-
-        // Detect double click
-        if (state && (now - m_lastClickTime < 1))
-        {
-            doubleClick = true;
-            m_callback(true, now - m_lastChangeTime, doubleClick, isHolding); // Double click
-        }
-        m_lastClickTime = now;
     }
 
     /// The callback
@@ -268,6 +265,11 @@ public:
             case LOOPER_BUTTON: 
                 m_button.connect(data, [this](bool pressed, double interval, bool doubleClick, bool isHolding)
                 {
+                    if (!pressed)
+                    {
+                        isHolding = false; // Reset holding state on release
+                        return;
+                    }
                     if (doubleClick)
                     {
                         // Double click to reset, this should override other actions
