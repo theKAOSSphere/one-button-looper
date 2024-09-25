@@ -144,51 +144,22 @@ public:
     /// \param now The current time. Used for checking for double clicks.
     void run(double now)
     {
+        isHolding = false;
         if (m_input == NULL)
             return;
 
         bool state = (*m_input) > 0.0f ? true : false;
         if (state == m_lastState)
-        {
-            // Check for long press and double click
-            if (state && (now - m_pressStartTime >= m_longPressDuration))
-            {
-                if (!isHolding)
-                {
-                    isHolding = true;
-                    m_callback(true, now - m_lastChangeTime, doubleClick, isHolding); // Long press
-                }
-            }
-            else if (state && (now - m_lastClickTime < 1))
-            {
-                doubleClick = true;
-                m_callback(true, now - m_lastChangeTime, doubleClick, isHolding); // Double click
-            }
             return;
-        }
-
-        // State change detected
         m_lastState = state;
+        bool doubleClick = false;
         if (state)
         {
-            // Button pressed
-            m_pressStartTime = now;
-            m_callback(true, 0, doubleClick, isHolding); // Short press begins
+            if (now - m_lastClickTime < 1)
+                doubleClick = true;
+            m_lastClickTime = now;
         }
-        else
-        {
-            // Button released
-            if (isHolding)
-            {
-                isHolding = false; // Reset holding state
-                m_callback(false, now - m_lastChangeTime, doubleClick, isHolding);
-            }
-            else
-            {
-                // Normal button release
-                m_callback(false, now - m_lastChangeTime, doubleClick, isHolding);
-            }
-        }
+        m_callback(state, now - m_lastChangeTime, doubleClick, isHolding);
         m_lastChangeTime = now;
     }
 
