@@ -104,6 +104,8 @@ enum PortIndex
     LOOPER_MAIN_BUTTON = 5,
     /// Amount of the dry signal in the output
     LOOPER_DRY_AMOUNT = 6,
+    /// Select if dub continues across loop boundaries
+    LOOPER_CONTINUOUS_DUB = 7,
 };
 
 ///
@@ -267,6 +269,7 @@ public:
             case LOOPER_OUTPUT2: m_output2 = (float*)data; return;
             case LOOPER_THRESHOLD: m_thresholdParameter = (const float*)data; return;
             case LOOPER_DRY_AMOUNT: m_dryAmountParameter = (const float*)data; return;
+            case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return;
             default: break;
         }
 
@@ -373,8 +376,15 @@ public:
                 }
                 else if (m_state == LOOPER_STATE_OVERDUBBING)
                 {
-                    // Auto-finish overdubbing and continue playing
+                    // Auto-finish overdubbing and continue playing (or continue if continuous mode)
                     finishOverdubbing();
+                    
+                    // Check for continuous dub mode
+                    if (*m_continuousDubParameter > 0.0f)
+                    {
+                        // Continue overdubbing automatically across loop boundary
+                        startOverdubbing();
+                    }
                 }
             }
         }
@@ -390,6 +400,9 @@ private:
 
     /// Dry amount parameter
     const float* m_dryAmountParameter = NULL;
+
+    /// Continuous dub mode parameter
+    const float* m_continuousDubParameter = NULL;
     
     /// Main Ditto-style button
     DittoButton m_mainButton;
@@ -598,7 +611,7 @@ private:
         }
     }
 
-    /// Start recording a dub if possible (a dub and memory for audio left).
+    /// Start recording a dub if possible (a dub and memory left).
     void startRecording()
     {
         if (m_nrOfDubs >= NR_OF_DUBS)
