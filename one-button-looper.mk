@@ -1,34 +1,42 @@
 ######################################
 #
-# loopor-lv2
+# one-button-looper
 #
 ######################################
 
 # where to find the source code - locally in this case
-LOOPOR_LV2_SITE_METHOD = local
-LOOPOR_LV2_SITE = $($(PKG)_PKGDIR)/
+ONE_BUTTON_LOOPER_SITE_METHOD = local
+ONE_BUTTON_LOOPER_SITE = $($(PKG)_PKGDIR)/
 
 # even though this is a local build, we still need a version number
 # bump this number if you need to force a rebuild
-LOOPOR_LV2_VERSION = 5
+ONE_BUTTON_LOOPER_VERSION = 1
 
 # dependencies (list of other buildroot packages, separated by space)
-LOOPOR_LV2_DEPENDENCIES =
+ONE_BUTTON_LOOPER_DEPENDENCIES =
 
 # LV2 bundles that this package generates (space separated list)
-LOOPOR_LV2_BUNDLES = loopor.lv2
+ONE_BUTTON_LOOPER_BUNDLES = kaoss-obl.lv2
 
-# call make with the current arguments and path. "$(@D)" is the build directory.
-LOOPOR_LV2_TARGET_MAKE = $(TARGET_MAKE_ENV) $(TARGET_CONFIGURE_OPTS) $(MAKE) -C $(@D)/source
+# toolchain PATH trimmed to avoid inheriting Windows host entries with spaces
+ONE_BUTTON_LOOPER_TOOLCHAIN_PATH = $(HOST_DIR)/bin:$(HOST_DIR)/sbin:$(HOST_DIR)/usr/bin:$(HOST_DIR)/usr/sbin:/usr/bin:/bin
+
+# Use standard variables for cross-compilation
+ONE_BUTTON_LOOPER_TARGET_MAKE = PATH="$(ONE_BUTTON_LOOPER_TOOLCHAIN_PATH)" \
+    CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" AR="$(TARGET_AR)" LD="$(TARGET_LD)" \
+    PKG_CONFIG="$(TARGET_PKG_CONFIG)" \
+    CFLAGS="$(TARGET_CFLAGS)" CXXFLAGS="$(TARGET_CXXFLAGS)" \
+    LDFLAGS="$(TARGET_LDFLAGS)" \
+    $(MAKE) -C $(@D)/source
 
 # build command
-define LOOPOR_LV2_BUILD_CMDS
-	$(LOOPOR_LV2_TARGET_MAKE)
+define ONE_BUTTON_LOOPER_BUILD_CMDS
+    $(ONE_BUTTON_LOOPER_TARGET_MAKE)
 endef
 
 # install command
-define LOOPOR_LV2_INSTALL_TARGET_CMDS
-	$(LOOPOR_LV2_TARGET_MAKE) install DESTDIR=$(TARGET_DIR)
+define ONE_BUTTON_LOOPER_INSTALL_TARGET_CMDS
+    $(ONE_BUTTON_LOOPER_TARGET_MAKE) install DESTDIR=$(TARGET_DIR)
 endef
 
 

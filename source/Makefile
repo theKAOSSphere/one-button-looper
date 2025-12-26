@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
-# Makefile for loopor.lv2 #
+# Makefile for kaoss-obl.lv2 #
 # ----------------------- #
-# Created by falkTX, Stevie
+# Created by KAOSS
 #
 
 include Makefile.mk
@@ -17,28 +17,27 @@ DESTDIR ?=
 all: build
 
 # --------------------------------------------------------------
-# loopor build rules
+# kaoss-obl build rules
 
-build: loopor.lv2/loopor$(LIB_EXT) loopor.lv2/manifest.ttl
+build: kaoss-obl.lv2/kaoss-obl$(LIB_EXT) kaoss-obl.lv2/manifest.ttl
 
-loopor.lv2/loopor$(LIB_EXT): loopor.cpp
+kaoss-obl.lv2/kaoss-obl$(LIB_EXT): obl.cpp
 	$(CXX) $^ $(BUILD_CXX_FLAGS) $(LINK_FLAGS) -lm $(SHARED) -o $@
 
-loopor.lv2/manifest.ttl: loopor.lv2/manifest.ttl.in
+kaoss-obl.lv2/manifest.ttl: kaoss-obl.lv2/manifest.ttl.in
 	sed -e "s|@LIB_EXT@|$(LIB_EXT)|" $< > $@
 
 # --------------------------------------------------------------
 
 clean:
-	rm -f loopor.lv2/loopor$(LIB_EXT) loopor.lv2/manifest.ttl
+	rm -f kaoss-obl.lv2/kaoss-obl$(LIB_EXT) kaoss-obl.lv2/manifest.ttl
 
 # --------------------------------------------------------------
 
 install: build
-	install -d $(DESTDIR)$(PREFIX)/lib/lv2/loopor.lv2
+	install -d $(DESTDIR)$(PREFIX)/lib/lv2/kaoss-obl.lv2
 
-	install -m 644 loopor.lv2/*.so  $(DESTDIR)$(PREFIX)/lib/lv2/loopor.lv2/
-	install -m 644 loopor.lv2/*.ttl $(DESTDIR)$(PREFIX)/lib/lv2/loopor.lv2/
-	cp -r loopor.lv2/modgui $(DESTDIR)$(PREFIX)/lib/lv2/loopor.lv2/
-
+	install -m 755 kaoss-obl.lv2/*.so  $(DESTDIR)$(PREFIX)/lib/lv2/kaoss-obl.lv2/
+	install -m 644 kaoss-obl.lv2/*.ttl $(DESTDIR)$(PREFIX)/lib/lv2/kaoss-obl.lv2/
+	cp -r kaoss-obl.lv2/modgui $(DESTDIR)$(PREFIX)/lib/lv2/kaoss-obl.lv2/
 # --------------------------------------------------------------
