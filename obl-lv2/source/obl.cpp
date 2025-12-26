@@ -1,7 +1,7 @@
 //
 // MIT License
 //
-// Copyright 2018 Stevie <modplugins@radig.com>
+// Copyright 2025 KAOSS <thekaossphere@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -32,6 +32,9 @@
 #include <stdarg.h>
 #include <string.h>
 
+// Needed for undo stack
+#include <vector>
+
 // Core definitions for the LV2 interface
 #include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 
@@ -40,7 +43,7 @@
 //
 
 /// URI which identifies the plugin
-static const char* LOOPER_URI = "http://radig.com/plugins/loopor";
+static const char* LOOPER_URI = "https://github.com/theKAOSSphere/one-button-looper/";
 /// The maximum number of dubs that can be recorded
 static const size_t NR_OF_DUBS = 128;
 /// The maximum number of seconds which can be recorded for all dubs.
@@ -51,6 +54,8 @@ static const size_t STORAGE_MEMORY_SECONDS = 360;
 static const size_t NR_OF_BLEND_SAMPLES = 64;
 /// Allow to enable logging to a file (/root/loopor.log)
 static const bool LOG_ENABLED = false;
+/// Time threshold for double click detection (in seconds)
+static const double DOUBLE_CLICK_TIME = 0.5;
 
 ///
 /// Convert an input parameter expressed as db into a linear float value
@@ -75,7 +80,9 @@ typedef enum
     // The looper is recording a dub.
     LOOPER_STATE_RECORDING,
     // The looper is still playing all the active dubs.
-    LOOPER_STATE_PLAYING
+    LOOPER_STATE_PLAYING,
+    // The looper is overdubbing (recording additional layers)
+    LOOPER_STATE_OVERDUBBING
 } State;
 
 ///
@@ -93,20 +100,10 @@ enum PortIndex
     LOOPER_OUTPUT2 = 3,
     /// Threshold parameter
     LOOPER_THRESHOLD = 4,
-    /// Activate button
-    LOOPER_ACTIVATE = 5,
-    /// Reset button
-    LOOPER_RESET = 6,
-    /// Undo button
-    LOOPER_UNDO = 7,
-    /// Redo button
-    LOOPER_REDO = 8,
-    /// Dub button
-    LOOPER_DUB = 9,
+    /// Main control button (Ditto-style)
+    LOOPER_MAIN_BUTTON = 5,
     /// Amount of the dry signal in the output
-    LOOPER_DRY_AMOUNT = 10,
-    /// Select if dub ends at end of loop
-    LOOPER_CONTINUOUS_DUB = 11,
+    LOOPER_DRY_AMOUNT = 6,
 };
 
 ///
@@ -127,16 +124,14 @@ public:
 };
 
 ///
-/// Simplify handling of momentary (aka trigger) buttons. It allows to connect to
-/// a float LV2 input and will call a callback function when the value changes.
-/// Also allows for double clicks without a second. Should the host allow it, it
-/// would also allow for long / short press distinction.
+/// Enhanced button handler for Ditto-style functionality with tap detection
+/// Handles single tap, double tap, triple tap, and quad tap
 ///
-class MomentaryButton
+class DittoButton
 {
 public:
     // Connect the button to an input and set the callback.
-    void connect(void* input, std::function<void (bool, double, bool)> callback)
+    void connect(void* input, std::function<void (bool, double, bool, bool, int)> callback)
     {
         m_input = static_cast<const float*>(input);
         m_callback = callback;
@@ -145,40 +140,87 @@ public:
     /// To be called every run call of the plugin. Will check the state of the
     /// button and call the callback if necessary.
     ///
-    /// \param now The current time. Used for checking for double clicks.
+    /// \param now The current time. Used for checking tap timing.
     void run(double now)
     {
         if (m_input == NULL)
             return;
 
-        bool state = (*m_input) > 0.0f ? true : false;
-        if (state == m_lastState)
-            return;
-        m_lastState = state;
-        bool doubleClick = false;
-        if (state)
+        bool currentState = (*m_input) > 0.0f ? true : false;
+        
+        // Handle button press
+        if (currentState && !m_lastState)
         {
-            if (now - m_lastClickTime < 1)
-                doubleClick = true;
-            m_lastClickTime = now;
+            if (now - m_lastReleaseTime > DOUBLE_CLICK_TIME)
+            {
+                // New tap sequence
+                m_tapCount = 1;
+                m_sequenceStartTime = now;
+            }
+            else
+            {
+                // Continuation of tap sequence
+                m_tapCount++;
+            }
+            m_pressStartTime = now;
+            m_isPressed = true;
         }
-        m_callback(state, now - m_lastChangeTime, doubleClick);
-        m_lastChangeTime = now;
+        
+        // Handle button release
+        else if (!currentState && m_lastState)
+        {
+            m_isPressed = false;
+            m_lastReleaseTime = now;
+            
+            // Check if this completes a tap sequence
+            if (now - m_sequenceStartTime <= DOUBLE_CLICK_TIME * 2) // Allow some tolerance
+            {
+                // Wait a bit to see if more taps come
+                m_pendingTapCount = m_tapCount;
+                m_pendingTimeout = now + DOUBLE_CLICK_TIME;
+            }
+        }
+        
+        // Check for pending tap sequence timeout
+        if (m_pendingTapCount > 0 && now > m_pendingTimeout)
+        {
+            int tapCount = m_pendingTapCount;
+            m_pendingTapCount = 0;
+            
+            // Trigger callback with tap count
+            m_callback(false, 0, tapCount >= 2, tapCount >= 3, tapCount);
+        }
+
+        m_lastState = currentState;
     }
 
     /// The callback
-    /// \param bool pressed Is the button pressed or released?
-    /// \param double How long since the last state change?
-    /// \param doubleClick Was this pressed twice within a second?
-    std::function<void (bool, double, bool)> m_callback;
+    /// \param bool pressed Is the button currently pressed?
+    /// \param double pressDuration How long was/is the button pressed?
+    /// \param bool doubleClick Was this a double tap?
+    /// \param bool longPress Was this a long press? (kept for compatibility, always false)
+    /// \param int tapCount Number of taps in the sequence
+    std::function<void (bool, double, bool, bool, int)> m_callback;
+    
+private:
     /// The input it is connected to.
     const float* m_input = NULL;
-    /// The last state, used for supressing multiple callbacks.
+    /// The last state, used for detecting changes.
     bool m_lastState = false;
-    /// When was the last change
-    double m_lastChangeTime = 0;
-    /// Used for detecting double clicks.
-    double m_lastClickTime = 0;
+    /// Current press state
+    bool m_isPressed = false;
+    /// When the current press started
+    double m_pressStartTime = 0;
+    /// When the last release happened
+    double m_lastReleaseTime = 0;
+    /// When the current tap sequence started
+    double m_sequenceStartTime = 0;
+    /// Number of taps in current sequence
+    int m_tapCount = 0;
+    /// Pending tap count waiting for timeout
+    int m_pendingTapCount = 0;
+    /// When to trigger the pending tap sequence
+    double m_pendingTimeout = 0;
 };
 
 ///
@@ -225,87 +267,22 @@ public:
             case LOOPER_OUTPUT2: m_output2 = (float*)data; return;
             case LOOPER_THRESHOLD: m_thresholdParameter = (const float*)data; return;
             case LOOPER_DRY_AMOUNT: m_dryAmountParameter = (const float*)data; return;
-            case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return;
             default: break;
         }
 
-        // Install the buttons and set their callback functions.
-        if (port == LOOPER_ACTIVATE)
+        // Install the main button with Ditto-style behavior
+        if (port == LOOPER_MAIN_BUTTON)
         {
-            m_activateButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
+            m_mainButton.connect(data, [this](bool pressed, double duration, bool doubleClick, bool longPress, int tapCount)
             {
-                if (!pressed)
-                    return;
-                if (doubleClick)
-                {
-                    reset();
-                    return;
-                }
-
-                if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
-                    finishRecording();
-                else
-                    startRecording();
-            });
-        }
-        else if (port == LOOPER_RESET)
-        {
-            m_resetButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-                if (!pressed)
-                    return;
-                if (doubleClick)
-                {
-                    reset();
-                    return;
-                }
-
-                if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
-                    finishRecording();
-                else
-                    undo();
-            });
-        }
-        else if (port == LOOPER_UNDO)
-        {
-            m_undoButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-                if (!pressed)
-                    return;
-                undo();
-            });
-        }
-        else if (port == LOOPER_REDO)
-        {
-            m_redoButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-                if (!pressed)
-                    return;
-                redo();
-            });
-        }
-        else if (port == LOOPER_DUB)
-        {
-            m_dubButton.connect(data, [this](bool pressed, double interval, bool doubleClick)
-            {
-               if (!pressed)
-                    return;
-                if (doubleClick)
-                {
-                    reset();
-                    return;
-                }
-
-                if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD)
-                    finishRecording();
-                startRecording();
+                handleDittoButton(pressed, duration, doubleClick, longPress, tapCount);
             });
         }
     }
 
     /// Run the looper. Called for a bunch of samples at a time. Parameters will not change within this
     /// call!
-    /// \param The number of samples to be read from the input and writte to the output.
+    /// \param The number of samples to be read from the input and written to the output.
     void run(uint32_t nrOfSamples)
     {
         updateParameters();
@@ -335,11 +312,21 @@ public:
                 m_state = LOOPER_STATE_RECORDING;
             }
 
-            // If we are recoding do the record.
-            if (m_state == LOOPER_STATE_RECORDING)
+            // If we are recording or overdubbing, do the record.
+            if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_OVERDUBBING)
             {
-                m_storage1[m_nrOfUsedSamples] = in1;
-                m_storage2[m_nrOfUsedSamples] = in2;
+                if (m_state == LOOPER_STATE_OVERDUBBING)
+                {
+                    // For overdubbing, add to existing audio
+                    m_storage1[m_nrOfUsedSamples] += in1;
+                    m_storage2[m_nrOfUsedSamples] += in2;
+                }
+                else
+                {
+                    // For initial recording, replace audio
+                    m_storage1[m_nrOfUsedSamples] = in1;
+                    m_storage2[m_nrOfUsedSamples] = in2;
+                }
                 m_nrOfUsedSamples++;
                 Dub& dub = m_dubs[m_nrOfDubs];
                 dub.m_length++;
@@ -381,16 +368,13 @@ public:
 
                 if (m_state == LOOPER_STATE_RECORDING)
                 {
-                    // Stop the recording only, if we did not have the threshold, yet.
-                    // That allows to start recording right at the start of the loop.
+                    // Auto-finish the first recording and start playing
                     finishRecording();
-                    if(*m_continuousDubParameter && m_nrOfDubs > 0)
-                    {
-                        // This is the second dub, meaning we're overdubbing so don't
-                        // actually stop recording dubs until the user clicks the
-                        // button again.
-                        startRecording();
-                    }
+                }
+                else if (m_state == LOOPER_STATE_OVERDUBBING)
+                {
+                    // Auto-finish overdubbing and continue playing
+                    finishOverdubbing();
                 }
             }
         }
@@ -406,20 +390,9 @@ private:
 
     /// Dry amount parameter
     const float* m_dryAmountParameter = NULL;
-
-    /// Continuous dub mode parameter
-    const float* m_continuousDubParameter = NULL;
     
-    /// Activate button
-    MomentaryButton m_activateButton;
-    /// Reset button
-    MomentaryButton m_resetButton;
-    /// Undo button
-    MomentaryButton m_undoButton;
-    /// Redo button
-    MomentaryButton m_redoButton;
-    /// Dub button
-    MomentaryButton m_dubButton;
+    /// Main Ditto-style button
+    DittoButton m_mainButton;
 
     //
     // All audio inputs
@@ -453,10 +426,21 @@ private:
     float m_dryAmount = 1.0f;
     /// Where are we with the first (main) loop. The first loop governs all the loops!
     size_t m_currentLoopIndex = 0;
-    /// The lenght of the main loop
+    /// The length of the main loop
     size_t m_loopLength = 0;
     /// Current time, sample accurate used for buttons
     double m_now = 0;
+    /// Whether we can undo the last overdub
+    bool m_canUndo = false;
+    /// Storage offset for undo functionality
+    size_t m_undoStorageOffset = 0;
+    /// Length for undo functionality  
+    size_t m_undoLength = 0;
+    /// Whether undo has been toggled (true = currently undone) - commented out, no longer used
+    // bool m_undoToggled = false;
+
+    /// Stack for multi-level undo functionality (stores pairs of nrOfDubs and nrOfUsedSamples)
+    std::vector<std::pair<size_t, size_t>> m_undoStack;
 
     //
     // Storage memory for audio
@@ -503,6 +487,92 @@ private:
         fflush(m_logFile);
     }
 
+    /// Handle Ditto-style button behavior with tap detection
+    void handleDittoButton(bool pressed, double duration, bool doubleClick, bool longPress, int tapCount)
+    {
+        if (tapCount == 2)
+        {
+            // Double tap: Stop playback or recording
+            if (m_state != LOOPER_STATE_INACTIVE)
+            {
+                m_state = LOOPER_STATE_INACTIVE;
+                m_currentLoopIndex = 0;
+            }
+            return;
+        }
+        
+        if (tapCount == 4)
+        {
+            // Quad tap: Clear loop
+            reset();
+            return;
+        }
+        
+        if (tapCount == 3)
+        {
+            // Triple tap: Undo last overdub if playing/overdubbing
+            if (m_state == LOOPER_STATE_PLAYING || m_state == LOOPER_STATE_OVERDUBBING)
+            {
+                if (m_canUndo)
+                {
+                    undoLastOverdub();
+                    // Note: Redo functionality commented out for now
+                    // m_undoToggled = true;
+                }
+                /*
+                // Commented out: Toggle undo/redo functionality
+                if (!m_undoToggled)
+                {
+                    // Try undo
+                    if (m_canUndo)
+                    {
+                        undoLastOverdub();
+                        m_undoToggled = true;
+                    }
+                }
+                else
+                {
+                    // Try redo
+                    if (m_canUndo)
+                    {
+                        redoLastOverdub();
+                        m_undoToggled = false;
+                    }
+                }
+                */
+            }
+            return;
+        }
+        
+        if (tapCount == 1 && !pressed)
+        {
+            // Single tap (on release)
+            switch (m_state)
+            {
+                case LOOPER_STATE_INACTIVE:
+                    // Start recording first loop
+                    startRecording();
+                    break;
+                    
+                case LOOPER_STATE_RECORDING:
+                case LOOPER_STATE_WAITING_FOR_THRESHOLD:
+                    // End recording and start playback
+                    finishRecording();
+                    break;
+                    
+                case LOOPER_STATE_PLAYING:
+                    // Start overdubbing
+                    startOverdubbing();
+                    break;
+                    
+                case LOOPER_STATE_OVERDUBBING:
+                    // End overdubbing, continue playing
+                    finishOverdubbing();
+                    break;
+            }
+        }
+    }
+
     /// Reset everything to initial state.
     void reset()
     {
@@ -512,7 +582,20 @@ private:
         m_state = LOOPER_STATE_INACTIVE;
         m_currentLoopIndex = 0;
         m_loopLength = 0;
-        m_nrOfUsedSamples = 0;
+        m_canUndo = false;
+        m_undoStorageOffset = 0;
+        m_undoLength = 0;
+        // m_undoToggled = false; // commented out, no longer used
+        
+        // Clear the undo stack
+        m_undoStack.clear();
+        
+        // Clear all audio from memory to prevent any bleed-through
+        if (m_storage1 != NULL && m_storage2 != NULL)
+        {
+            memset(m_storage1, 0, m_storageSize * sizeof(float));
+            memset(m_storage2, 0, m_storageSize * sizeof(float));
+        }
     }
 
     /// Start recording a dub if possible (a dub and memory for audio left).
@@ -532,6 +615,34 @@ private:
 
         // Now start the recording.
         m_state = LOOPER_STATE_WAITING_FOR_THRESHOLD;
+    }
+
+    /// Start overdubbing
+    void startOverdubbing()
+    {
+        if (m_nrOfDubs >= NR_OF_DUBS)
+            return;
+        if (m_nrOfUsedSamples >= m_storageSize)
+            return;
+
+        // Push current state to undo stack for multi-level undo
+        m_undoStack.push_back({m_nrOfDubs, m_nrOfUsedSamples});
+
+        // Reset undo toggle when beginning a new overdub session - commented out, no longer used
+        // m_undoToggled = false;
+
+        // Store current state for undo
+        m_undoStorageOffset = m_nrOfUsedSamples;
+        m_undoLength = 0;
+        m_canUndo = false; // Will be set to true when overdub is finished
+
+        // Prepare the new overdub
+        Dub& dub = m_dubs[m_nrOfDubs];
+        dub.m_storageOffset = m_nrOfUsedSamples;
+        dub.m_length = 0;
+        dub.m_startIndex = m_currentLoopIndex;
+
+        m_state = LOOPER_STATE_OVERDUBBING;
     }
 
     /// Finish the recording.
@@ -559,8 +670,7 @@ private:
         }
 
         // Fixup the start and the end of the loop. We simply fade in and out over
-        // 32 samples for now. Not sure if that's good for everything, seems to work
-        // nicely enough, though.
+        // NR_OF_BLEND_SAMPLES samples for now.
         size_t length = dub.m_length > NR_OF_BLEND_SAMPLES ? NR_OF_BLEND_SAMPLES : dub.m_length;
         size_t startIndex = dub.m_storageOffset;
         size_t endIndex = dub.m_storageOffset + dub.m_length - 1;
@@ -583,58 +693,76 @@ private:
         m_maxUsedDubs = m_nrOfDubs;
     }
 
-    /// Undo the last recorded dub, if there is any. Will also stop recording. So a currently
-    /// recording dub will not be heard but could be redone!
-    void undo()
+    /// Finish overdubbing
+    void finishOverdubbing()
     {
-        if (m_state == LOOPER_STATE_RECORDING)
-            // When we are recording, we interpret undo as undoing the current recording.
-            // So we simply finish it and then immediately undo.
-            finishRecording();
-        if (m_nrOfDubs == 0)
-            // Nothing to undo.
+        if (m_state != LOOPER_STATE_OVERDUBBING)
             return;
 
-        // Deactivate the undone dub.
-        m_nrOfDubs--;
+        m_state = LOOPER_STATE_PLAYING;
         Dub& dub = m_dubs[m_nrOfDubs];
-        // Make sure that next time we record the undone dub will be overwritten. Recording
-        // next time will invalidate any possiblity to redo!
-        m_nrOfUsedSamples = dub.m_storageOffset;
-        if (m_nrOfDubs == 0)
+
+        // Store undo information
+        m_undoLength = dub.m_length;
+        m_canUndo = true;
+
+        // Apply fade in/out to the overdub
+        size_t length = dub.m_length > NR_OF_BLEND_SAMPLES ? NR_OF_BLEND_SAMPLES : dub.m_length;
+        size_t startIndex = dub.m_storageOffset;
+        size_t endIndex = dub.m_storageOffset + dub.m_length - 1;
+        for (size_t s = 0; s < length; s++)
         {
-            // When undoing the first dub, then we stop playing. It is like a reset, but
-            // we can still redo.
-            m_loopLength = 0;
+            float factor = float(s) / length;
+            m_storage1[startIndex] *= factor;
+            m_storage2[startIndex] *= factor;
+            startIndex++;
+            m_storage1[endIndex] *= factor;
+            m_storage2[endIndex] *= factor;
+            endIndex--;
+        }
+
+        // Activate the overdub
+        m_nrOfDubs++;
+        m_maxUsedDubs = m_nrOfDubs;
+    }
+
+    /// Undo the last overdub
+    void undoLastOverdub()
+    {
+        if (m_undoStack.empty())
+            return;
+
+        // Pop the last state from the undo stack
+        size_t prevNrOfDubs = m_undoStack.back().first;
+        size_t prevNrOfUsedSamples = m_undoStack.back().second;
+        m_undoStack.pop_back();
+
+        // Restore the previous state
+        m_nrOfDubs = prevNrOfDubs;
+        m_nrOfUsedSamples = prevNrOfUsedSamples;
+
+        // If we've undone all overdubs, go back to playing state
+        if (m_nrOfDubs > 0)
+        {
+            m_state = LOOPER_STATE_PLAYING;
+        }
+        else
+        {
+            m_state = LOOPER_STATE_INACTIVE;
             m_currentLoopIndex = 0;
+            m_loopLength = 0;
         }
     }
 
-    /// Redo a dub. Redo is possible as many times as an undo was done _after_ the last
-    /// recording operation. Recording will invalidate all redos - similar to what a
-    /// text editor does.
-    void redo()
+    /// Redo the last overdub
+    void redoLastOverdub()
     {
-        if (m_state == LOOPER_STATE_RECORDING)
-            // Cannot redo if recording, redo info is overwritten.
-            return;
-        if (m_nrOfDubs == m_maxUsedDubs)
-            // Nothing to redo here, we are already at the last track.
+        if (!m_canUndo || m_nrOfDubs >= m_maxUsedDubs)
             return;
 
-        // Can redo!
+        // Reactivate the overdub
         Dub& dub = m_dubs[m_nrOfDubs];
-        // Make sure that we do not overwrite the dubs audio data when recording
-        // next time.
         m_nrOfUsedSamples = dub.m_storageOffset + dub.m_length;
-        if (m_nrOfDubs == 0)
-        {
-            // If redoing the first dub, then we start playback from the beginning.
-            m_currentLoopIndex = 0;
-            m_loopLength = dub.m_length;
-        }
-
-        // Now activate the redone dub.
         m_nrOfDubs++;
     }
 
@@ -643,11 +771,7 @@ private:
     {
         m_threshold = dbToFloat(*m_thresholdParameter);
         m_dryAmount = *m_dryAmountParameter;
-        m_activateButton.run(m_now);
-        m_resetButton.run(m_now);
-        m_undoButton.run(m_now);
-        m_redoButton.run(m_now);
-        m_dubButton.run(m_now);
+        m_mainButton.run(m_now);
     }
 };
 
