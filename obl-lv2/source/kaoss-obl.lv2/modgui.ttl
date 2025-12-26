@@ -1,22 +1,26 @@
 @prefix modgui: <http://moddevices.com/ns/modgui#> .
 @prefix lv2:    <http://lv2plug.in/ns/lv2core#> .
 
-<http://radig.com/plugins/loopor>
+<https://github.com/theKAOSSphere/one-button-looper/>
     modgui:gui [
         modgui:resourcesDirectory <modgui> ;
-        modgui:iconTemplate <modgui/icon-loopor.html> ;
-        modgui:stylesheet <modgui/stylesheet-loopor.css> ;
-        modgui:screenshot <modgui/screenshot-loopor.png> ;
-        modgui:thumbnail <modgui/thumbnail-loopor.png> ;
-        modgui:brand "Stevie" ;
-        modgui:label "Loopor" ;
+        modgui:iconTemplate <modgui/icon-obl.html> ;
+        modgui:stylesheet <modgui/stylesheet-obl.css> ;
+        modgui:screenshot <modgui/screenshot-obl.png> ;
+        modgui:thumbnail <modgui/thumbnail-obl.png> ;
+        modgui:brand "KAOSS" ;
+        modgui:label "One-Button Looper" ;
         modgui:model "boxy" ;
-        modgui:panel "1-knob" ;
+        modgui:panel "2-knobs" ;
         modgui:color "cyan" ;
         modgui:knob "blue" ;
         modgui:port [
             lv2:index 0 ;
             lv2:symbol "threshold" ;
             lv2:name "Threshold" ;
+        ] , [
+            lv2:index 1 ;
+            lv2:symbol "dry" ;
+            lv2:name "Dry Amount" ;
         ] ;
     ] .
