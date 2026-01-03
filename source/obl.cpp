@@ -204,7 +204,11 @@ public:
                 m_callback(4, false); // TAP RELEASE: for delayed actions
                 m_lastReleaseTime = now;
             }
+
+            m_isPressed = false;
         }
+
+        m_lastState = currentState;
     }
 
     /// The callback
