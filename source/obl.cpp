@@ -52,8 +52,6 @@ static const size_t NR_OF_DUBS = 128;
 /// it will consume less memory.
 static const size_t STORAGE_MEMORY_SECONDS = 360;
 static const size_t NR_OF_BLEND_SAMPLES = 64;
-/// Allow to enable logging to a file (/root/loopor.log)
-static const bool LOG_ENABLED = false;
 /// Time threshold for double click detection (in seconds)
 static const double DOUBLE_CLICK_TIME = 0.5;
 
@@ -241,9 +239,6 @@ public:
         m_storageSize = sampleRate * STORAGE_MEMORY_SECONDS * 2;
         m_storage1 = new float[m_storageSize];
         m_storage2 = new float[m_storageSize];
-
-        if (LOG_ENABLED)
-            m_logFile = fopen("/root/loopor.log", "wb");
     }
 
     // Destructor
@@ -251,8 +246,6 @@ public:
     {
         delete[] m_storage1;
         delete[] m_storage2;
-        if (m_logFile != NULL)
-            fclose(m_logFile);
     }
 
     /// Called by the host for each port to connect it to the looper.
@@ -478,27 +471,6 @@ private:
     size_t m_maxUsedDubs = 0;
     /// The dubs
     Dub m_dubs[NR_OF_DUBS];
-
-    /// If we want to log to a file, we can use this.
-    FILE* m_logFile = NULL;
-
-    /// Log function (printf-style)
-    void log(const char *formatString, ...)
-    {
-        if (!LOG_ENABLED)
-            return;
-        if (m_logFile == NULL)
-            return;
-
-        char buffer[2048];
-        va_list argumentList;
-        va_start(argumentList, formatString);
-        vsnprintf(&buffer[0], sizeof(buffer), formatString, argumentList);
-        va_end(argumentList);
-        fwrite(buffer, 1, strlen(buffer), m_logFile);
-        fprintf(m_logFile, "\n");
-        fflush(m_logFile);
-    }
 
     /// Handle Ditto-style button behavior with tap detection
     void handleDittoButton(bool pressed, double duration, bool doubleClick, bool longPress, int tapCount)
