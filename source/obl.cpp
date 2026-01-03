@@ -53,7 +53,9 @@ static const size_t NR_OF_DUBS = 128;
 static const size_t STORAGE_MEMORY_SECONDS = 360;
 static const size_t NR_OF_BLEND_SAMPLES = 64;
 /// Time threshold for double click detection (in seconds)
-static const double DOUBLE_CLICK_TIME = 0.5;
+static const double DOUBLE_CLICK_TIME = 0.3;
+/// Time threshold for hold detection (in seconds)
+static const double HOLD_TIME = 1.5;
 
 ///
 /// Convert an input parameter expressed as db into a linear float value
@@ -70,13 +72,15 @@ static float dbToFloat(float db)
 ///
 typedef enum
 {
-    // The looper does not have an active dub and is not recording.
-    LOOPER_STATE_INACTIVE,
+    // The looper does not contain any recorded loop.
+    LOOPER_STATE_EMPTY,
     // The looper has started recording a dub, but audio did not exceed the
     // threshold so far.
     LOOPER_STATE_WAITING_FOR_THRESHOLD,
     // The looper is recording a dub.
     LOOPER_STATE_RECORDING,
+    // The looper has recorded a loop but is currently not playing.
+    LOOPER_STATE_STOPPED,
     // The looper is still playing all the active dubs.
     LOOPER_STATE_PLAYING,
     // The looper is overdubbing (recording additional layers)
@@ -125,13 +129,18 @@ public:
 
 ///
 /// Enhanced button handler for Ditto-style functionality with tap detection
-/// Handles single tap, double tap, triple tap, and quad tap
+/// - Tap actions fire on PRESS for instant response
+/// - Hold fires after 1.5s and REVERTS the tap action
+/// - Double-tap detected by timing between consecutive releases
 ///
 class DittoButton
 {
 public:
     // Connect the button to an input and set the callback.
-    void connect(void* input, std::function<void (bool, double, bool, bool, int)> callback)
+    // Callback signature: (Action Type, isPress)
+    // 1 = Single Tap (Rec/Play/Dub), 2 = Double Tap (Stop), 3 = Hold (Undo/Clear), 4 = Tap Release
+    // isPress = true means this tap might become a hold
+    void connect(void* input, std::function<void (int, bool)> callback)
     {
         m_input = static_cast<const float*>(input);
         m_callback = callback;
@@ -148,59 +157,60 @@ public:
 
         bool currentState = (*m_input) > 0.0f ? true : false;
         
-        // Handle button press
+        // Handle button press (rising edge)
         if (currentState && !m_lastState)
         {
-            if (now - m_lastReleaseTime > DOUBLE_CLICK_TIME)
+            m_pressStartTime = now;
+            m_isPressed = true;
+            m_holdTriggered = false;
+
+            // Fire tap IMMEDIATELY on press for instant response
+            // Second param = true means "this is a press, might become hold"
+            m_callback(1, true);
+        }
+        
+        // Handle button hold (HIGH state)
+        else if (currentState && m_isPressed)
+        {
+            if (!m_holdTriggered && (now - m_pressStartTime) >= HOLD_TIME)
             {
-                // New tap sequence
-                m_tapCount = 1;
-                m_sequenceStartTime = now;
+                m_holdTriggered = true;
+                // Fire hold - the handler should UNDO the tap action if needed
+                m_callback(3, false);
+            }
+        }
+        
+        // Handle button release (falling edge)
+        else if (!currentState && m_lastState)
+        {
+            m_lastState = false;
+            
+            if (m_holdTriggered)
+            {
+                // Hold already fired, don't do anything else
+                return;
+            }
+
+            // Check for double-tap (second release within window)
+            if (m_lastReleaseTime > 0 && (now - m_lastReleaseTime) < DOUBLE_CLICK_TIME)
+            {
+                // Fire double-tap: STOP
+                m_callback(2, false);
+                m_lastReleaseTime = 0; // Reset to prevent triple-tap issues
             }
             else
             {
-                // Continuation of tap sequence
-                m_tapCount++;
-            }
-            m_pressStartTime = now;
-            m_isPressed = true;
-        }
-        
-        // Handle button release
-        else if (!currentState && m_lastState)
-        {
-            m_isPressed = false;
-            m_lastReleaseTime = now;
-            
-            // Check if this completes a tap sequence
-            if (now - m_sequenceStartTime <= DOUBLE_CLICK_TIME * 2) // Allow some tolerance
-            {
-                // Wait a bit to see if more taps come
-                m_pendingTapCount = m_tapCount;
-                m_pendingTimeout = now + DOUBLE_CLICK_TIME;
+                // Single tap confirmed on release
+                m_callback(4, false); // TAP RELEASE: for delayed actions
+                m_lastReleaseTime = now;
             }
         }
-        
-        // Check for pending tap sequence timeout
-        if (m_pendingTapCount > 0 && now > m_pendingTimeout)
-        {
-            int tapCount = m_pendingTapCount;
-            m_pendingTapCount = 0;
-            
-            // Trigger callback with tap count
-            m_callback(false, 0, tapCount >= 2, tapCount >= 3, tapCount);
-        }
-
-        m_lastState = currentState;
     }
 
     /// The callback
-    /// \param bool pressed Is the button currently pressed?
-    /// \param double pressDuration How long was/is the button pressed?
-    /// \param bool doubleClick Was this a double tap?
-    /// \param bool longPress Was this a long press? (kept for compatibility, always false)
-    /// \param int tapCount Number of taps in the sequence
-    std::function<void (bool, double, bool, bool, int)> m_callback;
+    /// \param action The action type
+    /// \param isPress True if this is a press that might become a hold
+    std::function<void (int, bool)> m_callback;
     
 private:
     /// The input it is connected to.
@@ -213,14 +223,8 @@ private:
     double m_pressStartTime = 0;
     /// When the last release happened
     double m_lastReleaseTime = 0;
-    /// When the current tap sequence started
-    double m_sequenceStartTime = 0;
-    /// Number of taps in current sequence
-    int m_tapCount = 0;
-    /// Pending tap count waiting for timeout
-    int m_pendingTapCount = 0;
-    /// When to trigger the pending tap sequence
-    double m_pendingTimeout = 0;
+    /// Check if the button is currently being held
+    bool m_holdTriggered = false;
 };
 
 ///
@@ -269,9 +273,9 @@ public:
         // Install the main button with Ditto-style behavior
         if (port == LOOPER_MAIN_BUTTON)
         {
-            m_mainButton.connect(data, [this](bool pressed, double duration, bool doubleClick, bool longPress, int tapCount)
+            m_mainButton.connect(data, [this](int action, bool isPress)
             {
-                handleDittoButton(pressed, duration, doubleClick, longPress, tapCount);
+                handleDittoButton(action, isPress);
             });
         }
     }
@@ -284,7 +288,9 @@ public:
         updateParameters();
 
         m_now += double(nrOfSamples) / m_sampleRate;
-        if (m_state == LOOPER_STATE_INACTIVE)
+
+        // EMPTY or STOPPED states: just pass through dry signal
+        if (m_state == LOOPER_STATE_EMPTY || m_state == LOOPER_STATE_STOPPED)
         {
             for (uint32_t s = 0; s < nrOfSamples; ++s)
             {
@@ -425,7 +431,7 @@ private:
     /// The stored sample rate
     uint32_t m_sampleRate = 48000;
     /// The current looper state
-    State m_state = LOOPER_STATE_INACTIVE;
+    State m_state = LOOPER_STATE_EMPTY;
     /// The stored threshold as a linear value
     float m_threshold = 0.0f;
     /// The stored dry amount
@@ -443,7 +449,9 @@ private:
     /// Length for undo functionality  
     size_t m_undoLength = 0;
     /// Whether undo has been toggled (true = currently undone) - commented out, no longer used
-    // bool m_undoToggled = false;
+    bool m_undoToggled = false;
+    // Track state before tap, for hold reversion
+    State m_preHoldState = LOOPER_STATE_EMPTY;
 
     /// Stack for multi-level undo functionality (stores pairs of nrOfDubs and nrOfUsedSamples)
     std::vector<std::pair<size_t, size_t>> m_undoStack;
@@ -472,90 +480,129 @@ private:
     /// The dubs
     Dub m_dubs[NR_OF_DUBS];
 
-    /// Handle Ditto-style button behavior with tap detection
-    void handleDittoButton(bool pressed, double duration, bool doubleClick, bool longPress, int tapCount)
+    /// Handle Ditto-style button actions
+    /// \param isPress = true means this tap might become a hold (so we might need to undo it)
+    /// \param Action 1 = Press, 2 = Double-tap, 3 = Hold, 4 = Release (confirmed tap)
+     void handleDittoButton(int action, bool isPress)
     {
-        if (tapCount == 2)
+        switch (action)
         {
-            // Double tap: Stop playback or recording
-            if (m_state != LOOPER_STATE_INACTIVE)
-            {
-                m_state = LOOPER_STATE_INACTIVE;
-                m_currentLoopIndex = 0;
-            }
-            return;
-        }
-        
-        if (tapCount == 4)
-        {
-            // Quad tap: Clear loop
-            reset();
-            return;
-        }
-        
-        if (tapCount == 3)
-        {
-            // Triple tap: Undo last overdub if playing/overdubbing
-            if (m_state == LOOPER_STATE_PLAYING || m_state == LOOPER_STATE_OVERDUBBING)
-            {
-                if (m_canUndo)
+            case 1: // SINGLE TAP - fires on PRESS for instant response
+                switch (m_state)
                 {
-                    undoLastOverdub();
-                    // Note: Redo functionality commented out for now
-                    // m_undoToggled = true;
+                    case LOOPER_STATE_EMPTY:
+                        // No loop - will start recording on release
+                        m_preHoldState = LOOPER_STATE_EMPTY;
+                        break;
+                    case LOOPER_STATE_STOPPED:
+                        // Has loop - will resume on release (so hold-to-clear works)
+                        m_preHoldState = LOOPER_STATE_STOPPED;
+                        break;
+                    case LOOPER_STATE_RECORDING:
+                    case LOOPER_STATE_WAITING_FOR_THRESHOLD:
+                        m_preHoldState = m_state;
+                        finishRecording(); 
+                        break;
+                    case LOOPER_STATE_PLAYING:
+                        // Save state in case hold triggers undo
+                        m_preHoldState = LOOPER_STATE_PLAYING;
+                        startOverdubbing(); 
+                        break;
+                    case LOOPER_STATE_OVERDUBBING:
+                        m_preHoldState = LOOPER_STATE_OVERDUBBING;
+                        finishOverdubbing(); 
+                        break;
                 }
-                /*
-                // Commented out: Toggle undo/redo functionality
-                if (!m_undoToggled)
+                break;
+
+            case 2: // DOUBLE TAP (Stop)
+                m_preHoldState = LOOPER_STATE_EMPTY;
+                if (m_state != LOOPER_STATE_EMPTY && m_state != LOOPER_STATE_STOPPED)
                 {
-                    // Try undo
-                    if (m_canUndo)
+                    if (m_state == LOOPER_STATE_RECORDING) finishRecording();
+                    else if (m_state == LOOPER_STATE_OVERDUBBING) finishOverdubbing();
+                    
+                    // Go to STOPPED if we have a loop, EMPTY if not
+                    m_state = (m_nrOfDubs > 0) ? LOOPER_STATE_STOPPED : LOOPER_STATE_EMPTY;
+                    m_currentLoopIndex = 0;
+                }
+                break;
+
+            case 3: // HOLD (Undo/Redo or Clear)
+                if (m_preHoldState == LOOPER_STATE_EMPTY)
+                {
+                    // Hold while empty = no-op (already clear)
+                }
+                else if (m_preHoldState == LOOPER_STATE_STOPPED)
+                {
+                    // Hold while stopped = CLEAR
+                    reset();
+                }
+                else 
+                {
+                    // REVERT the tap action that fired on press
+                    if (m_preHoldState == LOOPER_STATE_PLAYING && m_state == LOOPER_STATE_OVERDUBBING)
                     {
-                        undoLastOverdub();
-                        m_undoToggled = true;
+                        // We started overdubbing on press, cancel it
+                        cancelOverdubbing();
                     }
-                }
-                else
-                {
-                    // Try redo
-                    if (m_canUndo)
+                    else if (m_preHoldState == LOOPER_STATE_OVERDUBBING && m_state == LOOPER_STATE_PLAYING)
                     {
-                        redoLastOverdub();
+                        // We finished overdubbing on press, undo that finish
+                        undoLastOverdub();
+                    }
+                    
+                    // Now do the actual undo/redo toggle
+                    if (!m_undoToggled) 
+                    {
+                        if (!m_undoStack.empty()) 
+                        { 
+                            undoLastOverdub(); 
+                            m_undoToggled = true; 
+                        }
+                    } 
+                    else 
+                    {
+                        redoLastOverdub(); 
                         m_undoToggled = false;
                     }
                 }
-                */
-            }
-            return;
+                m_preHoldState = LOOPER_STATE_EMPTY; // Reset
+                break;
+
+            case 4: // TAP RELEASE - fires on release for delayed actions (EMPTY/STOPPED states)
+                if (m_preHoldState == LOOPER_STATE_EMPTY && m_state == LOOPER_STATE_EMPTY)
+                {
+                    // No loop - start recording
+                    startRecording();
+                }
+                else if (m_preHoldState == LOOPER_STATE_STOPPED && m_state == LOOPER_STATE_STOPPED)
+                {
+                    // Has loop - resume playback
+                    m_state = LOOPER_STATE_PLAYING;
+                }
+                m_preHoldState = LOOPER_STATE_EMPTY;
+                break;
+        }
+    }
+
+    /// Cancel an in-progress overdub without saving
+    void cancelOverdubbing()
+    {
+        if (m_state != LOOPER_STATE_OVERDUBBING) return;
+        
+        // Pop the undo stack entry we just pushed
+        if (!m_undoStack.empty())
+        {
+            m_nrOfUsedSamples = m_undoStack.back().second;
+            m_undoStack.pop_back();
         }
         
-        if (tapCount == 1 && !pressed)
-        {
-            // Single tap (on release)
-            switch (m_state)
-            {
-                case LOOPER_STATE_INACTIVE:
-                    // Start recording first loop
-                    startRecording();
-                    break;
-                    
-                case LOOPER_STATE_RECORDING:
-                case LOOPER_STATE_WAITING_FOR_THRESHOLD:
-                    // End recording and start playback
-                    finishRecording();
-                    break;
-                    
-                case LOOPER_STATE_PLAYING:
-                    // Start overdubbing
-                    startOverdubbing();
-                    break;
-                    
-                case LOOPER_STATE_OVERDUBBING:
-                    // End overdubbing, continue playing
-                    finishOverdubbing();
-                    break;
-            }
-        }
+        // Reset the current dub's length
+        Dub& dub = m_dubs[m_nrOfDubs];
+        dub.m_length = 0;
+        
+        m_state = LOOPER_STATE_PLAYING;
     }
 
     /// Reset everything to initial state.
@@ -564,13 +611,13 @@ private:
         m_nrOfDubs = 0;
         m_maxUsedDubs = 0;
         m_nrOfUsedSamples = 0;
-        m_state = LOOPER_STATE_INACTIVE;
+        m_state = LOOPER_STATE_EMPTY;
         m_currentLoopIndex = 0;
         m_loopLength = 0;
         m_canUndo = false;
         m_undoStorageOffset = 0;
         m_undoLength = 0;
-        // m_undoToggled = false; // commented out, no longer used
+        m_undoToggled = false;
         
         // Clear the undo stack
         m_undoStack.clear();
@@ -638,7 +685,7 @@ private:
             // We did not actually record anything, yet. So nothing to do. Just
             // go back to the previous state.
             if (m_nrOfDubs == 0)
-                m_state = LOOPER_STATE_INACTIVE;
+                m_state = LOOPER_STATE_EMPTY;
             else
                 m_state = LOOPER_STATE_PLAYING;
             return;
@@ -733,7 +780,7 @@ private:
         }
         else
         {
-            m_state = LOOPER_STATE_INACTIVE;
+            m_state = LOOPER_STATE_EMPTY;
             m_currentLoopIndex = 0;
             m_loopLength = 0;
         }
