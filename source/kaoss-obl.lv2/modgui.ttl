@@ -8,6 +8,7 @@
         modgui:stylesheet <modgui/stylesheet-obl.css> ;
         modgui:screenshot <modgui/screenshot-obl.png> ;
         modgui:thumbnail <modgui/thumbnail-obl.png> ;
+        modgui:monitoredOutputs [ lv2:symbol "looper_state" ] , [ lv2:symbol "dub_count" ] ;
         modgui:brand "KAOSS" ;
         modgui:label "One-Button Looper" ;
         modgui:model "boxy" ;
