@@ -80,7 +80,7 @@ Usage:
 		lv2:default 0;
 		lv2:minimum 0;
 		lv2:maximum 1;
-		lv2:portProperty lv2:integer, lv2:toggled, pprops:trigger;
+		lv2:portProperty lv2:integer, lv2:toggled, mod:preferMomentaryOnByDefault;
 	] , [
 		a lv2:InputPort, lv2:ControlPort;
 		lv2:index 6;
