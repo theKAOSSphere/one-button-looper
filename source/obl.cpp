@@ -317,21 +317,33 @@ public:
             // If we are recording or overdubbing, do the record.
             if (m_state == LOOPER_STATE_RECORDING || m_state == LOOPER_STATE_OVERDUBBING)
             {
-                if (m_state == LOOPER_STATE_OVERDUBBING)
+                // CRITICAL FIX: Bounds check BEFORE writing
+                if (m_nrOfUsedSamples < m_storageSize)
                 {
-                    // For overdubbing, add to existing audio
-                    m_storage1[m_nrOfUsedSamples] += in1;
-                    m_storage2[m_nrOfUsedSamples] += in2;
+                    if (m_state == LOOPER_STATE_OVERDUBBING)
+                    {
+                        // FIXED: Use '=' not '+=' to avoid ghost audio from undone takes
+                        m_storage1[m_nrOfUsedSamples] = in1;
+                        m_storage2[m_nrOfUsedSamples] = in2;
+                    }
+                    else
+                    {
+                        // For initial recording, replace audio
+                        m_storage1[m_nrOfUsedSamples] = in1;
+                        m_storage2[m_nrOfUsedSamples] = in2;
+                    }
+                    m_nrOfUsedSamples++;
+                    Dub& dub = m_dubs[m_nrOfDubs];
+                    dub.m_length++;
                 }
                 else
                 {
-                    // For initial recording, replace audio
-                    m_storage1[m_nrOfUsedSamples] = in1;
-                    m_storage2[m_nrOfUsedSamples] = in2;
+                    // Storage full, finish recording/overdubbing
+                    if (m_state == LOOPER_STATE_RECORDING)
+                        finishRecording();
+                    else if (m_state == LOOPER_STATE_OVERDUBBING)
+                        finishOverdubbing();
                 }
-                m_nrOfUsedSamples++;
-                Dub& dub = m_dubs[m_nrOfDubs];
-                dub.m_length++;
             }
 
             // Playback all active dubs.
@@ -357,12 +369,10 @@ public:
                 // Only once we are actually playing anything the loop length is known.
                 m_currentLoopIndex++;
 
-            // At the end increment the loop index and check if we are at the end
-            // of the loop. The first dub governs the length of the whole loop.
-            // So if still recording when we reach the end of the loop, we stop
-            // the recording! Note that if we don't have a dub, yet, then m_loopLength
-            // is 0, so no extra check is needed.
-            if (m_currentLoopIndex > m_loopLength || m_nrOfUsedSamples >= m_storageSize)
+            // LOOP END CHECK
+            // Only check loop end if we actually have a defined loop length (m_loopLength > 0)
+            // During first recording, m_loopLength is 0 - we don't want to trigger end-of-loop!
+            if ((m_loopLength > 0 && m_currentLoopIndex >= m_loopLength) || m_nrOfUsedSamples >= m_storageSize)
             {
                 // Reached the end of the loop, either because we exhausted storage
                 // or the end of the loop is there.
@@ -622,12 +632,11 @@ private:
         // Clear the undo stack
         m_undoStack.clear();
         
-        // Clear all audio from memory to prevent any bleed-through
-        if (m_storage1 != NULL && m_storage2 != NULL)
-        {
-            memset(m_storage1, 0, m_storageSize * sizeof(float));
-            memset(m_storage2, 0, m_storageSize * sizeof(float));
-        }
+        // FIXED: Removed zeroing of audio buffers to avoid xruns!
+        // NOTE: We intentionally do NOT zero the audio buffers here.
+        // Zeroing ~276 MB in the real-time thread would cause xruns.
+        // The playback logic respects dub boundaries, so old data is never heard.
+        // New recordings use '=' not '+=', so they overwrite cleanly.
     }
 
     /// Start recording a dub if possible (a dub and memory left).
@@ -660,8 +669,8 @@ private:
         // Push current state to undo stack for multi-level undo
         m_undoStack.push_back({m_nrOfDubs, m_nrOfUsedSamples});
 
-        // Reset undo toggle when beginning a new overdub session - commented out, no longer used
-        // m_undoToggled = false;
+        // Reset undo toggle when beginning a new overdub session
+        m_undoToggled = false;
 
         // Store current state for undo
         m_undoStorageOffset = m_nrOfUsedSamples;
@@ -712,9 +721,13 @@ private:
             m_storage1[startIndex] *= factor;
             m_storage2[startIndex] *= factor;
             startIndex++;
-            m_storage1[endIndex] *= factor;
-            m_storage2[endIndex] *= factor;
-            endIndex--;
+
+            // Check to avoid overlapping pointers if dub is extremely short
+            if (endIndex > startIndex) {
+                m_storage1[endIndex] *= factor;
+                m_storage2[endIndex] *= factor;
+                endIndex--;
+            }
         }
 
         // Now the dub is officially ready for playing...
@@ -748,9 +761,11 @@ private:
             m_storage1[startIndex] *= factor;
             m_storage2[startIndex] *= factor;
             startIndex++;
-            m_storage1[endIndex] *= factor;
-            m_storage2[endIndex] *= factor;
-            endIndex--;
+            if (endIndex > startIndex) {
+                m_storage1[endIndex] *= factor;
+                m_storage2[endIndex] *= factor;
+                endIndex--;
+            }
         }
 
         // Activate the overdub
@@ -792,10 +807,14 @@ private:
         if (!m_canUndo || m_nrOfDubs >= m_maxUsedDubs)
             return;
 
+        // Restore the stack
+        m_undoStack.push_back({m_nrOfDubs, m_nrOfUsedSamples});
+        
         // Reactivate the overdub
         Dub& dub = m_dubs[m_nrOfDubs];
         m_nrOfUsedSamples = dub.m_storageOffset + dub.m_length;
         m_nrOfDubs++;
+        m_state = LOOPER_STATE_PLAYING;
     }
 
     /// Update all the parameters from the inputs.
