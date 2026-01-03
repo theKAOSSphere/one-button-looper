@@ -28,10 +28,6 @@
 // Needed for the callbacks
 #include <functional>
 
-// Needed for writing debug output to a log file
-#include <stdarg.h>
-#include <string.h>
-
 // Needed for undo stack
 #include <vector>
 
@@ -108,6 +104,10 @@ enum PortIndex
     LOOPER_DRY_AMOUNT = 6,
     /// Select if dub continues across loop boundaries
     LOOPER_CONTINUOUS_DUB = 7,
+    /// Output port for MODGUI state monitoring (0-5)
+    LOOPER_STATE_OUTPUT = 8,    
+    /// Output port for number of dubs
+    LOOPER_DUB_COUNT_OUTPUT = 9
 };
 
 ///
@@ -267,6 +267,8 @@ public:
             case LOOPER_THRESHOLD: m_thresholdParameter = (const float*)data; return;
             case LOOPER_DRY_AMOUNT: m_dryAmountParameter = (const float*)data; return;
             case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return;
+            case LOOPER_STATE_OUTPUT: m_stateOutput = (float*)data; return;
+            case LOOPER_DUB_COUNT_OUTPUT: m_dubCountOutput = (float*)data; return;
             default: break;
         }
 
@@ -286,6 +288,10 @@ public:
     void run(uint32_t nrOfSamples)
     {
         updateParameters();
+
+         // Update monitored outputs for MODGUI
+        if (m_stateOutput) *m_stateOutput = static_cast<float>(m_state);
+        if (m_dubCountOutput) *m_dubCountOutput = static_cast<float>(m_nrOfDubs);
 
         m_now += double(nrOfSamples) / m_sampleRate;
 
@@ -433,6 +439,14 @@ private:
     float* m_output1 = NULL;
     /// audio output 2
     float* m_output2 = NULL;
+
+    //
+    // Monitored outputs for MODGUI
+    //
+    /// Output for looper state monitoring
+    float* m_stateOutput = NULL;
+    /// Output for dub count monitoring
+    float* m_dubCountOutput = NULL;
 
     //
     // Internal state
