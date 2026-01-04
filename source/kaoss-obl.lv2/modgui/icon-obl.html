@@ -2,7 +2,7 @@
     <div mod-role="drag-handle" class="mod-drag-handle"></div>
     <div class="mod-plugin-brand"><h1>{{brand}}</h1></div>
     <div class="mod-plugin-name"><h1>{{label}}</h1></div>
-    <div class="mod-light on" mod-role="bypass-light"></div>
+    <div class="mod-light" mod-role="input-control-port" mod-port-symbol="main_button" mod-widget="switch"></div>
     <div class="mod-looper-display" mod-role="looper-display">
         <div class="mod-looper-state" mod-role="looper-state">EMPTY</div>
         <div class="mod-dub-count" mod-role="dub-count">Layers: 0</div>
@@ -25,7 +25,7 @@
             <span class="mod-knob-title">Cont. Dub</span>
         </div>
     </div>
-    <div class="mod-footswitch" mod-role="bypass"></div>
+    <div class="mod-footswitch" mod-role="input-control-port" mod-port-symbol="main_button" mod-widget="switch"></div>
     <div class="mod-pedal-input">
         {{#effect.ports.audio.input}}
         <div class="mod-input mod-input-disconnected" title="{{name}}" mod-role="input-audio-port" mod-port-symbol="{{symbol}}">
