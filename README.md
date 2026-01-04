@@ -2,7 +2,7 @@
 
 **A simple stereo looper designed for single-button operation as an LV2 plugin, optimized for the MOD Audio platform.**
 
-Forked from the original [Loopor](https://github.com/stevie67/loopor), this plugin has been modified for simpler operation. It provides a single-footswitch workflow with stereo I/O and configurable controls for threshold, dry mix, and overdubs.
+Forked from the original [Loopor](https://github.com/stevie67/loopor), this plugin has been modified for simpler operation, inspired by the simple single-button operation of loopers such as the TC Electronic Ditto and the Boss RC-1. It provides a single-footswitch workflow with stereo I/O and configurable controls for threshold, dry mix, overdubs and loop gain. It also features a big display showing the looper's internal state for easy operation.
 
 <p align="center">
   <img src="source/kaoss-obl.lv2/modgui/screenshot-obl.png" alt="One-Button Looper screenshot" width="200" />
@@ -13,9 +13,11 @@ Forked from the original [Loopor](https://github.com/stevie67/loopor), this plug
 ## Features
 - **Stereo inputs and outputs** (In1/2 → Out1/2).
 - **Single-button Ditto-style operation**: record, overdub, stop, undo/redo, clear.
+- **Large colour display** showing the internal state of the looper and the number of layers for simplified operation.
 - **Configurable input threshold** to auto-start recording on signal presence.
 - **Dry amount control** to blend live input with looped audio.
 - **High overdub capacity** and seamless loop end (no clicks).
+- **Loop gain control** to control the volume level of the looped audio.
 
 ---
 
@@ -29,7 +31,8 @@ Forked from the original [Loopor](https://github.com/stevie67/loopor), this plug
   * Press and Hold: Clears the loop when playback is stopped.
   * Undo/Redo: While overdubbing, pressing and holding the footswitch undoes the last overdub. Pressing and holding again restores the overdub (redo).  
 - **Dry Amount** — Mix original input with output (0 = only looped audio).  
-- **Continuous Dub** — toggle to enable/disable continuous overdubbing.
+- **Continuous Dub** — Toggle to enable/disable continuous overdubbing.
+- **Loop Gain** – Control the volume level of the looped audio. Available range from muted to +12dB with halfway position being unity gain.
 
 ---
 
@@ -122,8 +125,8 @@ sudo apt-get install build-essential lv2-dev
 ## Credits & License
 
 *  **Original Base:** This project is based on the Loopor plugin by Stevie: https://github.com/stevie67/loopor
-*  **Inspiration:** Inspired by the TC Electronic Ditto Looper pedal.
-*   **Ditto Looper Emulation & MODGUI:** Modification of the source to emulate the Ditto Looper hardware and development of the MODGUI by **KAOSS**.
+*  **Inspiration:** Inspired by the TC Electronic Ditto Looper and the Boss RC-1 Loop Station pedals.
+*   **Single-button operation & MODGUI:** Modification of the source to emulate the Ditto Looper hardware and development of the MODGUI by **KAOSS**.
 *   **License:** This project is licensed under the MIT License. See the `LICENSE` file for details.
 
-This software is not affiliated with or endorsed by TC Electronic. All trademarks are the property of their respective owners.
+This software is not affiliated with or endorsed by TC Electronic and/or Boss Corporation. All trademarks are the property of their respective owners.
