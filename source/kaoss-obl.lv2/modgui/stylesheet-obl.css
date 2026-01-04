@@ -169,3 +169,98 @@
 .mod-pedal-japanese{{{cns}}} .mod-control-group .mod-knob .mod-toggle.off {
     background-position:bottom center !important;
 }
+
+
+/* = LOOPER STATE DISPLAY (High Visibility Mode)
+================================================ */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display {
+    position: absolute;
+    left: 15px;
+    right: 15px;
+    top: 20px;
+    background: #222; /* Default Idle color */
+    border-radius: 4px;
+    padding: 8px 5px;
+    text-align: center;
+    z-index: 50;
+    border: 2px solid rgba(255,255,255,0.1);
+    transition: background 0.2s ease-in-out; /* Smooth transition between states */
+}
+
+.mod-pedal-japanese{{{cns}}} .mod-looper-display .mod-looper-state {
+    font-family: "Nexa", monospace;
+    font-size: 20px;
+    font-weight: bold;
+    color: #fff;
+    letter-spacing: 2px;
+}
+
+/* --- STATE OVERRIDES --- */
+
+/* RECORDING: Bright Red Bg, White Text */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-recording {
+    background: #ff0000;
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
+}
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-recording .mod-looper-state {
+    color: #ffffff;
+    animation: blinker 0.6s linear infinite;
+}
+
+/* PLAYING: Bright Green Bg, Black Text */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-playing {
+    background: #33ff33;
+}
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-playing .mod-looper-state {
+    color: #000000;
+}
+
+/* OVERDUBBING: Orange Bg, White Text */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-overdubbing {
+    background: #ff9900;
+}
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-overdubbing .mod-looper-state {
+    color: #ffffff;
+}
+
+/* WAITING: Yellow Bg, Black Text */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-waiting {
+    background: #ffff00;
+}
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-waiting .mod-looper-state {
+    color: #000000;
+}
+
+/* EMPTY & STOPPED: Pitch Black "Off" State */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-empty,
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-stopped {
+    background: #080808; /* Almost pure black */
+    box-shadow: inset 0 5px 15px rgba(0,0,0,1); /* Deep recess shadow */
+    border-color: #333; /* Dark border to blend in */
+}
+
+/* Dim the text to look like "unlit" segments */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-empty .mod-looper-state,
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-stopped .mod-looper-state {
+    color: #666; /* Dark Grey text - visible but clearly "inactive" */
+    text-shadow: none;
+}
+
+/* Optional: Make STOPPED slightly brighter than EMPTY if you want distinction */
+.mod-pedal-japanese{{{cns}}} .mod-looper-display.state-stopped .mod-looper-state {
+    color: #888; /* Slightly brighter grey for Stopped */
+}
+
+/* Helper Animation for Recording */
+@keyframes blinker {
+    50% { opacity: 0.3; }
+}
+
+.mod-pedal-japanese{{{cns}}} .mod-looper-display {
+  background: linear-gradient(#2b2b2b, #111);   /* slightly glossy screen */
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.6);           /* thin bezel */
+  box-shadow:
+    inset 0 8px 18px rgba(0,0,0,0.65),         /* deep inner shadow (top) */
+    inset 0 -6px 12px rgba(255,255,255,0.02);  /* faint top highlight (bottom) */
+}

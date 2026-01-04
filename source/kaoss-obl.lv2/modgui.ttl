@@ -6,6 +6,7 @@
         modgui:resourcesDirectory <modgui> ;
         modgui:iconTemplate <modgui/icon-obl.html> ;
         modgui:stylesheet <modgui/stylesheet-obl.css> ;
+        modgui:javascript <modgui/script-obl.js> ;
         modgui:screenshot <modgui/screenshot-obl.png> ;
         modgui:thumbnail <modgui/thumbnail-obl.png> ;
         modgui:monitoredOutputs [ lv2:symbol "looper_state" ] , [ lv2:symbol "dub_count" ] ;
