@@ -41,6 +41,8 @@ Usage:
 • Press Twice (quickly): Stops playback or recording.
 • Press and Hold: Clears the loop when playback is stopped.
 • Undo/Redo: While overdubbing, pressing and holding the footswitch undoes the last overdub. Pressing and holding again restores the overdub (redo).
+• Adjust the "Loop Gain" knob to control the volume level of the looped audio. Available range from muted to +12dB with halfway position being unity gain.
+• Turning the "Continuous Dub" on allows for overdubbing continuously without needing to press the button again.
 	""";
 	
 	lv2:port [
