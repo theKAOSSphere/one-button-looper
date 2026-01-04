@@ -11,17 +11,25 @@
         modgui:monitoredOutputs [ lv2:symbol "looper_state" ] , [ lv2:symbol "dub_count" ] ;
         modgui:brand "KAOSS" ;
         modgui:label "One-Button Looper" ;
-        modgui:model "boxy" ;
-        modgui:panel "2-knobs" ;
-        modgui:color "cyan" ;
-        modgui:knob "blue" ;
+        modgui:model "japanese" ;
+        modgui:panel "4-knobs" ;
+        modgui:color "red" ;
+        modgui:knob "aluminium" ;
         modgui:port [
             lv2:index 0 ;
             lv2:symbol "threshold" ;
-            lv2:name "Threshold" ;
+            lv2:name "Thresh" ;
         ] , [
             lv2:index 1 ;
             lv2:symbol "dry" ;
-            lv2:name "Dry Amount" ;
+            lv2:name "Dry Amt." ;
+        ] , [
+            lv2:index 2 ;
+            lv2:symbol "loop_gain" ;
+            lv2:name "Loop Gain" ;
+        ] , [
+            lv2:index 3 ;
+            lv2:symbol "continuous_dub" ;
+            lv2:name "Cont. Dub" ;
         ] ;
     ] .
