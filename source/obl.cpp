@@ -64,6 +64,27 @@ static float dbToFloat(float db)
 }
 
 ///
+/// Helper function for custom volume curve for loop gain
+///
+static float loopGainCurve(float value)
+{
+    if (value <= 0.01f)
+        return 0.0f;
+    else if (value <= 0.5f)
+    {
+        // Curve from -90dB up to 0dB
+        float db = -90.0f + (value * 2.0f * 90.0f);
+        return dbToFloat(db);
+    }
+    else 
+    {
+        // Linear boost from 0dB to +12dB
+        float db = (value - 0.5f) * 2.0f * 12.0f;
+        return dbToFloat(db);
+    }
+}
+
+///
 /// Represent the state of the dub
 ///
 typedef enum
@@ -107,7 +128,9 @@ enum PortIndex
     /// Output port for MODGUI state monitoring (0-5)
     LOOPER_STATE_OUTPUT = 8,    
     /// Output port for number of dubs
-    LOOPER_DUB_COUNT_OUTPUT = 9
+    LOOPER_DUB_COUNT_OUTPUT = 9,
+    /// Global gain applied to looped (recorded) audio
+    LOOPER_LOOP_GAIN = 10
 };
 
 ///
@@ -271,6 +294,7 @@ public:
             case LOOPER_THRESHOLD: m_thresholdParameter = (const float*)data; return;
             case LOOPER_DRY_AMOUNT: m_dryAmountParameter = (const float*)data; return;
             case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return;
+            case LOOPER_LOOP_GAIN: m_loopGainParameter = (const float*)data; return;
             case LOOPER_STATE_OUTPUT: m_stateOutput = (float*)data; return;
             case LOOPER_DUB_COUNT_OUTPUT: m_dubCountOutput = (float*)data; return;
             default: break;
@@ -298,6 +322,11 @@ public:
         if (m_dubCountOutput) *m_dubCountOutput = static_cast<float>(m_nrOfDubs);
 
         m_now += double(nrOfSamples) / m_sampleRate;
+
+        // Prepare loop gain smoothing across this block
+        float gainStep = 0.0f;
+        if (m_loopGainTarget != m_loopGain && nrOfSamples > 0)
+            gainStep = (m_loopGainTarget - m_loopGain) / float(nrOfSamples);
 
         // EMPTY or STOPPED states: just pass through dry signal
         if (m_state == LOOPER_STATE_EMPTY || m_state == LOOPER_STATE_STOPPED)
@@ -356,6 +385,9 @@ public:
                 }
             }
 
+            // Smooth loop gain per-sample
+            m_loopGain += gainStep;
+
             // Playback all active dubs.
             float out1 = m_dryAmount * in1;
             float out2 = m_dryAmount * in2;
@@ -367,8 +399,8 @@ public:
                 if (m_currentLoopIndex >= dub.m_startIndex + dub.m_length)
                     continue;
                 size_t index = dub.m_storageOffset + (m_currentLoopIndex - dub.m_startIndex);
-                out1 += m_storage1[index];
-                out2 += m_storage2[index];
+                out1 += m_storage1[index] * m_loopGain;
+                out2 += m_storage2[index] * m_loopGain;
             }
 
             // Store accumulated output.
@@ -422,6 +454,13 @@ private:
 
     /// Continuous dub mode parameter
     const float* m_continuousDubParameter = NULL;
+
+    /// Global loop gain parameter (controls playback level of recorded dubs)
+    const float* m_loopGainParameter = NULL;
+    /// Current applied loop gain (smoothed)
+    float m_loopGain = 1.0f;
+    /// Target loop gain as read from parameter
+    float m_loopGainTarget = 1.0f;
     
     /// Main Ditto-style button
     DittoButton m_mainButton;
@@ -840,6 +879,7 @@ private:
     {
         m_threshold = dbToFloat(*m_thresholdParameter);
         m_dryAmount = *m_dryAmountParameter;
+        m_loopGainTarget = loopGainCurve(*m_loopGainParameter);
         m_mainButton.run(m_now);
     }
 };

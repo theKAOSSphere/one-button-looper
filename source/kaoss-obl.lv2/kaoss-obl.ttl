@@ -116,4 +116,17 @@ Usage:
 		lv2:maximum 128;
 		lv2:portProperty lv2:integer;
 		rdfs:comment "Number of recorded dub layers";
+	] ,	[
+		a lv2:InputPort, lv2:ControlPort;
+		lv2:index 10;
+		lv2:symbol "loop_gain";
+		lv2:name "Loop Gain";
+		lv2:default 0.5;
+        lv2:minimum 0.0;
+        lv2:maximum 1.0;
+        lv2:scalePoint [ rdfs:label "-inf";  rdf:value 0.0 ];
+        lv2:scalePoint [ rdfs:label "-45dB"; rdf:value 0.25 ];
+        lv2:scalePoint [ rdfs:label "0dB";   rdf:value 0.5 ];
+        lv2:scalePoint [ rdfs:label "+6dB";  rdf:value 0.75 ];
+        lv2:scalePoint [ rdfs:label "+12dB"; rdf:value 1.0 ];
 	] .
