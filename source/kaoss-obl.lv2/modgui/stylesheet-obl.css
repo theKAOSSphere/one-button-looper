@@ -175,8 +175,8 @@
 ================================================ */
 .mod-pedal-japanese{{{cns}}} .mod-looper-display {
     position: absolute;
-    left: 15px;
-    right: 15px;
+    left: 20px;
+    right: 19px;
     top: 20px;
     background: #222; /* Default Idle color */
     border-radius: 4px;
@@ -197,35 +197,74 @@
 
 /* --- STATE OVERRIDES --- */
 
-/* RECORDING: Bright Red Bg, White Text */
+/* RECORDING: Bright Red Bg with glossy screen overlay + White Text */
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-recording {
-    background: #ff0000;
-    box-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
+    /* Layer a translucent red overlay on top of the base glossy gradient so
+       the 'screen' effect remains visible while the overall tint is red. */
+    background-image: linear-gradient(rgba(255, 0, 0, 0.85), rgba(255, 0, 0, 0.6)), linear-gradient(#2b2b2b, #111);
+    background-size: cover;
+    /* Keep the normal bezel/border color but preserve a visible outer glow */
+    border-color: rgba(0,0,0,0.6);
+    box-shadow:
+        inset 0 8px 18px rgba(0,0,0,0.65),        /* preserve inner shadow */
+        inset 0 -6px 12px rgba(255,255,255,0.02), /* preserve highlight */
+        0 0 18px rgba(255, 0, 0, 0.55);           /* outer red glow */
 }
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-recording .mod-looper-state {
     color: #ffffff;
     animation: blinker 0.6s linear infinite;
 }
 
-/* PLAYING: Bright Green Bg, Black Text */
+/* PLAYING: Neon Lime Green Tinted Glass (#8cff32) */
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-playing {
-    background: #33ff33;
+    /* Layer 1: Bright Neon Lime Tint (High Opacity for visibility) */
+    /* Layer 2: The dark base gradient for depth */
+    background-image: linear-gradient(rgba(140, 255, 50, 0.9), rgba(140, 255, 50, 0.7)), linear-gradient(#2b2b2b, #111);
+    background-size: cover;
+
+    /* Keep bezel and apply the new neon lime glow */
+    border-color: rgba(0,0,0,0.6);
+    box-shadow:
+        inset 0 8px 18px rgba(0,0,0,0.65),       /* Inner shadow */
+        inset 0 -8px 18px rgba(255,255,255,0.1), /* Highlight */
+        0 0 20px rgba(140, 255, 50, 0.75);       /* Outer Neon Glow */
 }
+/* Ensure text remains black for maximum contrast on the bright lime */
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-playing .mod-looper-state {
     color: #000000;
 }
 
-/* OVERDUBBING: Orange Bg, White Text */
+/* OVERDUBBING: Brighter Orange Tinted Glass */
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-overdubbing {
-    background: #ff9900;
+    /* Layer a brighter translucent orange overlay on top of the base glossy gradient
+       to make the Overdub state pop while keeping the glossy texture. */
+    background-image: linear-gradient(rgba(255, 153, 0, 0.85), rgba(255, 153, 0, 0.75)), linear-gradient(#2b2b2b, #111);
+    background-size: cover;
+    /* Keep normal bezel color but preserve a stronger outer glow */
+    border-color: rgba(0,0,0,0.6);
+    box-shadow:
+        inset 0 8px 18px rgba(0,0,0,0.65),         /* preserve inner shadow */
+        inset 0 -8px 18px rgba(255,255,255,0.06),  /* stronger highlight for added brightness */
+        0 0 18px rgba(255,153,0,0.60);             /* brighter outer orange glow */
 }
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-overdubbing .mod-looper-state {
     color: #ffffff;
+    /* Pulse the text to make overdub visually prominent (same as recording) */
+    animation: blinker 0.6s linear infinite;
 }
 
-/* WAITING: Yellow Bg, Black Text */
+/* WAITING: Yellow Tinted Glass */
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-waiting {
-    background: #ffff00;
+    /* Layer 1: Bright Yellow Tint */
+    background-image: linear-gradient(rgba(255, 255, 0, 0.9), rgba(255, 255, 0, 0.7)), linear-gradient(#2b2b2b, #111);
+    background-size: cover;
+
+    /* Keep bezel and glow */
+    border-color: rgba(0,0,0,0.6);
+    box-shadow:
+        inset 0 8px 18px rgba(0,0,0,0.65),
+        inset 0 -6px 12px rgba(255,255,255,0.05),
+        0 0 18px rgba(255,255,0,0.45);
 }
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-waiting .mod-looper-state {
     color: #000000;
@@ -246,7 +285,7 @@
     text-shadow: none;
 }
 
-/* Optional: Make STOPPED slightly brighter than EMPTY if you want distinction */
+/* Make STOPPED slightly brighter than EMPTY for distinction */
 .mod-pedal-japanese{{{cns}}} .mod-looper-display.state-stopped .mod-looper-state {
     color: #888; /* Slightly brighter grey for Stopped */
 }
