@@ -101,6 +101,15 @@ static float softLimit(float x)
 }
 
 ///
+/// One-pole LPF
+///
+static inline float onePoleLPF(float input, float& state, float alpha)
+{
+    state = alpha * input + (1.0f - alpha) * state;
+    return state;
+}
+
+///
 /// Represent the state of the dub
 ///
 typedef enum
@@ -146,7 +155,9 @@ enum PortIndex
     /// Output port for number of dubs
     LOOPER_DUB_COUNT_OUTPUT = 9,
     /// Global gain applied to looped (recorded) audio
-    LOOPER_LOOP_GAIN = 10
+    LOOPER_LOOP_GAIN = 10,
+    /// Toggle for looper mode (Normal / Vintage)
+    LOOPER_MODE_VINTAGE = 11
 };
 
 ///
@@ -311,6 +322,7 @@ public:
             case LOOPER_DRY_AMOUNT: m_dryAmountParameter = (const float*)data; return;
             case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return;
             case LOOPER_LOOP_GAIN: m_loopGainParameter = (const float*)data; return;
+            case LOOPER_MODE_VINTAGE: m_vintageModeToggle = (const float*)data; return;
             case LOOPER_STATE_OUTPUT: m_stateOutput = (float*)data; return;
             case LOOPER_DUB_COUNT_OUTPUT: m_dubCountOutput = (float*)data; return;
             default: break;
@@ -355,6 +367,21 @@ public:
             return;
         }
 
+        float feedbackValue = 1.0f; // Default feedback: unity
+        float filterAlpha = 0.0f;   // No filtering by default
+
+        bool vintageMode = (m_vintageModeToggle != NULL && *m_vintageModeToggle > 0.5f);
+
+        if (vintageMode)
+        {
+            // Vintage mode: apply lowpass filter to feedback
+            feedbackValue = 0.90f; // Fixed feedback at 90% for vintage mode
+            // Calculate filter alpha for ~5kHz cutoff
+            float rc = 1.0f / (2.0f * 3.14159265f * 5000.0f);
+            float dt = 1.0f / static_cast<float>(m_sampleRate);
+            filterAlpha = dt / (rc + dt);
+        }
+
         for (uint32_t s = 0; s < nrOfSamples; ++s)
         {
             // Use the live input
@@ -377,13 +404,38 @@ public:
                 {
                     if (m_state == LOOPER_STATE_OVERDUBBING)
                     {
-                        // FIXED: Use '=' not '+=' to avoid ghost audio from undone takes
-                        m_storage1[m_nrOfUsedSamples] = in1;
-                        m_storage2[m_nrOfUsedSamples] = in2;
+                        // --- VINTAGE MODE FEEDBACK PATH ---
+                        // Imagine the buffer is a tape loop. We want to mix the old sound with the new sound.
+                        // 1. Read the old sample from the buffer (what was recorded last time around the loop)
+                        float oldL = m_storage1[m_nrOfUsedSamples];
+                        float oldR = m_storage2[m_nrOfUsedSamples];
+
+                        // 2. If vintage mode, filter the old sample to make it sound darker (like old tape)
+                        if (vintageMode)
+                        {
+                            oldL = onePoleLPF(oldL, m_lpfStateL, filterAlpha);
+                            oldR = onePoleLPF(oldR, m_lpfStateR, filterAlpha);
+                        }
+
+                        // 3. Make the old sound a little quieter each time (feedback)
+                        oldL *= feedbackValue;
+                        oldR *= feedbackValue;
+
+                        // 4. Add the new input (what you are playing now)
+                        float mixedL = oldL + in1;
+                        float mixedR = oldR + in2;
+
+                        // 5. Make sure the result never gets too loud (soft clip)
+                        mixedL = softLimit(mixedL);
+                        mixedR = softLimit(mixedR);
+
+                        // 6. Write the result back to the buffer (so next time around, it will be the old sound)
+                        m_storage1[m_nrOfUsedSamples] = mixedL;
+                        m_storage2[m_nrOfUsedSamples] = mixedR;
                     }
                     else
                     {
-                        // For initial recording, replace audio
+                        // For initial recording, just store the input (no feedback, no filter)
                         m_storage1[m_nrOfUsedSamples] = in1;
                         m_storage2[m_nrOfUsedSamples] = in2;
                     }
@@ -481,6 +533,9 @@ private:
     /// Main Ditto-style button
     DittoButton m_mainButton;
 
+    /// Vintage mode toggle button
+    const float* m_vintageModeToggle = NULL;
+
     //
     // All audio inputs
     //
@@ -538,6 +593,10 @@ private:
 
     /// Stack for multi-level undo functionality (stores pairs of nrOfDubs and nrOfUsedSamples)
     std::vector<std::pair<size_t, size_t>> m_undoStack;
+
+    /// Variables for vintage mode LPF
+    float m_lpfStateL = 0.0f;
+    float m_lpfStateR = 0.0f;
 
     //
     // Storage memory for audio
