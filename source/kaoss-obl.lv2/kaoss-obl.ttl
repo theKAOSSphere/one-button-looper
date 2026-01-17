@@ -31,7 +31,7 @@
         foaf:mbox <mailto:thekaossphere@gmail.com>;
     ];
 
-	rdfs:comment  """One-Button Looper is a simple looper plugin with only one button. It mimics the working of the TC Electronic Ditto looper pedal.
+	rdfs:comment  """One-Button Looper is a simple looper plugin with only one button. It mimics the working of the TC Electronic Ditto and the Boss RC-1 looper pedals.
 Usage:
 • Adjust the "Threshold" to only start recording once playing has started. If set to the lowest value, recording will start immediately. Otherwise it will start recording when the first sound comes in. The threshold can be used to filter out noise.
 • Adjust the "Dry Amount" to reduce the volume of the input signal directly routed to the output. Setting it to 0 means you will only hear any looped sounds, no direct sound.
@@ -43,6 +43,7 @@ Usage:
 • Undo/Redo: While overdubbing, pressing and holding the footswitch undoes the last overdub. Pressing and holding again restores the overdub (redo).
 • Adjust the "Loop Gain" knob to control the volume level of the looped audio. Available range from muted to +12dB with halfway position being unity gain.
 • Turning the "Continuous Dub" on allows for overdubbing continuously without needing to press the button again.
+• "Looper Mode" switch to toggle between Digital and Vintage looper modes. Vintage mode adds a bit of warmth and character to the looped audio. Labelled as "Vintage" on the MODGUI.
 	""";
 	
 	lv2:port [
@@ -131,4 +132,15 @@ Usage:
         lv2:scalePoint [ rdfs:label "0dB";   rdf:value 0.5 ];
         lv2:scalePoint [ rdfs:label "+6dB";  rdf:value 0.75 ];
         lv2:scalePoint [ rdfs:label "+12dB"; rdf:value 1.0 ];
+	] , [
+		a lv2:InputPort, lv2:ControlPort;
+		lv2:index 11;
+		lv2:symbol "looper_mode";
+		lv2:name "Looper Mode";
+		lv2:default 0;
+		lv2:minimum 0;
+		lv2:maximum 1;
+		lv2:portProperty lv2:integer, lv2:enumeration;
+    	lv2:scalePoint [ rdfs:label "Digital"; rdf:value 0 ];
+    	lv2:scalePoint [ rdfs:label "Vintage"; rdf:value 1 ];
 	] .
