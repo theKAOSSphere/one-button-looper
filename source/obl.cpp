@@ -22,6 +22,7 @@
 // SOFTWARE.
 
 #include <math.h>
+#include <cmath>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -82,6 +83,21 @@ static float loopGainCurve(float value)
         float db = (value - 0.5f) * 2.0f * 12.0f;
         return dbToFloat(db);
     }
+}
+
+///
+/// Simple Soft Clipper / Limiter
+///
+static float softLimit(float x) 
+{
+    const float threshold = 0.7f; // ~ -3dB
+    
+    if (x > threshold)
+        return threshold + (1.0f - threshold) * tanh((x - threshold) / (1.0f - threshold));
+    else if (x < -threshold)
+        return -(threshold + (1.0f - threshold) * tanh((-x - threshold) / (1.0f - threshold)));
+    else
+        return x;
 }
 
 ///
@@ -403,9 +419,9 @@ public:
                 out2 += m_storage2[index] * m_loopGain;
             }
 
-            // Store accumulated output.
-            m_output1[s] = out1;
-            m_output2[s] = out2;
+            // Store accumulated output with soft limiter applied.
+            m_output1[s] = softLimit(out1);
+            m_output2[s] = softLimit(out2);
 
             if (m_nrOfDubs > 0)
                 // Only once we are actually playing anything the loop length is known.
