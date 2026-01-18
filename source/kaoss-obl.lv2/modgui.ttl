@@ -30,7 +30,7 @@
             lv2:name "Loop Gain" ;
         ] , [
             lv2:index 3 ;
-            lv2:symbol "continuous_dub" ;
-            lv2:name "Cont. Dub" ;
+            lv2:symbol "looper_mode" ;
+            lv2:name "Vintage" ;
         ] ;
     ] .
