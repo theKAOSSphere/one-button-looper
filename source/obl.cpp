@@ -166,15 +166,16 @@ enum PortIndex
 class Dub
 {
 public:
-    /// Where is the dub's audio memory starting in the global audio storage?
     size_t m_storageOffset = 0;
-    /// The length of the dub. Each dub can have an individual length, but they
-    /// will still stay in sync!
     size_t m_length = 0;
-    /// The start index in the loop. This allows to save the memory before there
-    /// is actual audio in the loop. A dub only needs the memory between the
-    /// first and the last audio saved in the dub.
     size_t m_startIndex = 0;
+    bool m_isVintage = false; // Only need this now
+};
+
+struct UndoState
+{
+    size_t nrOfDubs;
+    size_t nrOfUsedSamples;
 };
 
 ///
@@ -375,19 +376,44 @@ public:
         if (vintageMode)
         {
             // Vintage mode: apply lowpass filter to feedback
-            feedbackValue = 0.90f; // Fixed feedback at 90% for vintage mode
-            // Calculate filter alpha for ~5kHz cutoff
-            float rc = 1.0f / (2.0f * 3.14159265f * 5000.0f);
+            feedbackValue = 0.95f; // Fixed feedback at 95% for vintage mode
+            // Calculate filter alpha for ~10kHz cutoff
+            float rc = 1.0f / (2.0f * 3.14159265f * 10000.0f);
             float dt = 1.0f / static_cast<float>(m_sampleRate);
             filterAlpha = dt / (rc + dt);
         }
 
         for (uint32_t s = 0; s < nrOfSamples; ++s)
         {
-            // Use the live input
             float in1 = m_input1[s];
             float in2 = m_input2[s];
 
+            // --- STEP 1: CALCULATE PLAYBACK SUM (Dynamic Masking) ---
+            float currentLoopSum1 = 0.0f;
+            float currentLoopSum2 = 0.0f;
+            bool vintageLayerFound = false;
+            for (int t = static_cast<int>(m_nrOfDubs) - 1; t >= 0; --t)
+            {
+                Dub& dub = m_dubs[t];
+                bool isPlaying = true;
+                if (m_currentLoopIndex < dub.m_startIndex) isPlaying = false;
+                if (m_currentLoopIndex >= dub.m_startIndex + dub.m_length) isPlaying = false;
+                if (isPlaying)
+                {
+                    if (!vintageLayerFound)
+                    {
+                        size_t index = dub.m_storageOffset + (m_currentLoopIndex - dub.m_startIndex);
+                        currentLoopSum1 += m_storage1[index] * m_loopGain;
+                        currentLoopSum2 += m_storage2[index] * m_loopGain;
+                    }
+                    if (dub.m_isVintage)
+                    {
+                        vintageLayerFound = true;
+                    }
+                }
+            }
+
+            // --- STEP 2: RECORDING LOGIC ---
             // Check if we reached the threshold to start recording.
             if (m_state == LOOPER_STATE_WAITING_FOR_THRESHOLD && (fabs(in1) >= m_threshold || fabs(in2) >= m_threshold))
             {
@@ -402,43 +428,43 @@ public:
                 // CRITICAL FIX: Bounds check BEFORE writing
                 if (m_nrOfUsedSamples < m_storageSize)
                 {
+                    float writeL = in1;
+                    float writeR = in2;
+
                     if (m_state == LOOPER_STATE_OVERDUBBING)
                     {
-                        // --- VINTAGE MODE FEEDBACK PATH ---
-                        // Imagine the buffer is a tape loop. We want to mix the old sound with the new sound.
-                        // 1. Read the old sample from the buffer (what was recorded last time around the loop)
-                        float oldL = m_storage1[m_nrOfUsedSamples];
-                        float oldR = m_storage2[m_nrOfUsedSamples];
+                        // --- VINTAGE MODE FEEDBACK PATH (FIXED) ---
+                        // Previously read from m_storage1[m_nrOfUsedSamples] which was WRONG (empty memory)
+                        // Now we read from currentLoopSum which is the actual playback audio
+                        float oldL = currentLoopSum1;
+                        float oldR = currentLoopSum2;
 
-                        // 2. If vintage mode, filter the old sample to make it sound darker (like old tape)
+                        // Apply vintage processing if enabled
                         if (vintageMode)
                         {
+                            // 1. Filter the old sound to make it darker (like old tape)
                             oldL = onePoleLPF(oldL, m_lpfStateL, filterAlpha);
                             oldR = onePoleLPF(oldR, m_lpfStateR, filterAlpha);
+                            
+                            // 2. Make the old sound a little quieter (feedback/decay)
+                            oldL *= feedbackValue;
+                            oldR *= feedbackValue;
                         }
 
-                        // 3. Make the old sound a little quieter each time (feedback)
-                        oldL *= feedbackValue;
-                        oldR *= feedbackValue;
-
-                        // 4. Add the new input (what you are playing now)
-                        float mixedL = oldL + in1;
-                        float mixedR = oldR + in2;
-
-                        // 5. Make sure the result never gets too loud (soft clip)
-                        mixedL = softLimit(mixedL);
-                        mixedR = softLimit(mixedR);
-
-                        // 6. Write the result back to the buffer (so next time around, it will be the old sound)
-                        m_storage1[m_nrOfUsedSamples] = mixedL;
-                        m_storage2[m_nrOfUsedSamples] = mixedR;
+                        // 3. Mix: (Old faded loop) + (Fresh input)
+                        writeL = oldL + in1;
+                        writeR = oldR + in2;
                     }
-                    else
-                    {
-                        // For initial recording, just store the input (no feedback, no filter)
-                        m_storage1[m_nrOfUsedSamples] = in1;
-                        m_storage2[m_nrOfUsedSamples] = in2;
-                    }
+                    // else: For initial recording, just use input (no feedback, no filter)
+
+                    // 4. Safety saturation to prevent clipping
+                    writeL = softLimit(writeL);
+                    writeR = softLimit(writeR);
+
+                    // 5. Write to the new memory location
+                    m_storage1[m_nrOfUsedSamples] = writeL;
+                    m_storage2[m_nrOfUsedSamples] = writeR;
+
                     m_nrOfUsedSamples++;
                     Dub& dub = m_dubs[m_nrOfDubs];
                     dub.m_length++;
@@ -456,20 +482,10 @@ public:
             // Smooth loop gain per-sample
             m_loopGain += gainStep;
 
-            // Playback all active dubs.
-            float out1 = m_dryAmount * in1;
-            float out2 = m_dryAmount * in2;
-            for (size_t t = 0; t < m_nrOfDubs; t++)
-            {
-                Dub& dub = m_dubs[t];
-                if (m_currentLoopIndex < dub.m_startIndex)
-                    continue;
-                if (m_currentLoopIndex >= dub.m_startIndex + dub.m_length)
-                    continue;
-                size_t index = dub.m_storageOffset + (m_currentLoopIndex - dub.m_startIndex);
-                out1 += m_storage1[index] * m_loopGain;
-                out2 += m_storage2[index] * m_loopGain;
-            }
+            // --- STEP 3: OUTPUT ---
+            // Mix live input (dry) with the loop backing track
+            float out1 = (m_dryAmount * in1) + currentLoopSum1;
+            float out2 = (m_dryAmount * in2) + currentLoopSum2;
 
             // Store accumulated output with soft limiter applied.
             m_output1[s] = softLimit(out1);
@@ -498,8 +514,8 @@ public:
                     // Auto-finish overdubbing and continue playing (or continue if continuous mode)
                     finishOverdubbing();
                     
-                    // Check for continuous dub mode
-                    if (*m_continuousDubParameter > 0.0f)
+                    // Check for continuous dub mode (with null safety)
+                    if (m_continuousDubParameter && *m_continuousDubParameter > 0.0f)
                     {
                         // Continue overdubbing automatically across loop boundary
                         startOverdubbing();
@@ -591,8 +607,8 @@ private:
     // Track state before tap, for hold reversion
     State m_preHoldState = LOOPER_STATE_EMPTY;
 
-    /// Stack for multi-level undo functionality (stores pairs of nrOfDubs and nrOfUsedSamples)
-    std::vector<std::pair<size_t, size_t>> m_undoStack;
+    /// Stack for multi-level undo functionality (stores full state including mute status)
+    std::vector<UndoState> m_undoStack;
 
     /// Variables for vintage mode LPF
     float m_lpfStateL = 0.0f;
@@ -682,34 +698,40 @@ private:
                 }
                 else 
                 {
-                    // REVERT the tap action that fired on press
+                    // 1. Check if we need to Revert a tap action
+                    bool didRevert = false;
+                    
                     if (m_preHoldState == LOOPER_STATE_PLAYING && m_state == LOOPER_STATE_OVERDUBBING)
                     {
-                        // We started overdubbing on press, cancel it
                         cancelOverdubbing();
+                        didRevert = true;
                     }
                     else if (m_preHoldState == LOOPER_STATE_OVERDUBBING && m_state == LOOPER_STATE_PLAYING)
                     {
-                        // We finished overdubbing on press, undo that finish
                         undoLastOverdub();
+                        didRevert = true;
                     }
-                    
-                    // Now do the actual undo/redo toggle
-                    if (!m_undoToggled) 
+
+                    // 2. Only Toggle Undo if we DIDN'T just revert a tap
+                    // (This prevents the "Double Undo" bug safely)
+                    if (!didRevert)
                     {
-                        if (!m_undoStack.empty()) 
-                        { 
-                            undoLastOverdub(); 
-                            m_undoToggled = true; 
+                        if (!m_undoToggled)
+                        {
+                            if (!m_undoStack.empty())
+                            {
+                                undoLastOverdub();
+                                m_undoToggled = true;
+                            }
                         }
-                    } 
-                    else 
-                    {
-                        redoLastOverdub(); 
-                        m_undoToggled = false;
+                        else
+                        {
+                            redoLastOverdub();
+                            m_undoToggled = false;
+                        }
                     }
                 }
-                m_preHoldState = LOOPER_STATE_EMPTY; // Reset
+                m_preHoldState = LOOPER_STATE_EMPTY;
                 break;
 
             case 4: // TAP RELEASE - fires on release for delayed actions (EMPTY/STOPPED states)
@@ -736,7 +758,8 @@ private:
         // Pop the undo stack entry we just pushed
         if (!m_undoStack.empty())
         {
-            m_nrOfUsedSamples = m_undoStack.back().second;
+            UndoState state = m_undoStack.back();
+            m_nrOfUsedSamples = state.nrOfUsedSamples;
             m_undoStack.pop_back();
         }
         
@@ -764,6 +787,16 @@ private:
         // Clear the undo stack
         m_undoStack.clear();
         
+        // Reset filter states to avoid DC offset or artifacts
+        m_lpfStateL = 0.0f;
+        m_lpfStateR = 0.0f;
+        
+        // Clear vintage flags on all dubs
+        for (size_t i = 0; i < NR_OF_DUBS; i++)
+        {
+            m_dubs[i].m_isVintage = false;
+        }
+        
         // FIXED: Removed zeroing of audio buffers to avoid xruns!
         // NOTE: We intentionally do NOT zero the audio buffers here.
         // Zeroing ~276 MB in the real-time thread would cause xruns.
@@ -785,6 +818,7 @@ private:
         Dub& dub = m_dubs[m_nrOfDubs];
         dub.m_storageOffset = m_nrOfUsedSamples;
         dub.m_length = 0;
+        dub.m_isVintage = false; // Not vintage (yet)
 
         // Now start the recording.
         m_state = LOOPER_STATE_WAITING_FOR_THRESHOLD;
@@ -798,7 +832,7 @@ private:
         if (m_nrOfUsedSamples >= m_storageSize)
             return;
 
-        // Push current state to undo stack for multi-level undo
+        // CAPTURE STATE FOR UNDO
         m_undoStack.push_back({m_nrOfDubs, m_nrOfUsedSamples});
 
         // Reset undo toggle when beginning a new overdub session
@@ -814,6 +848,7 @@ private:
         dub.m_storageOffset = m_nrOfUsedSamples;
         dub.m_length = 0;
         dub.m_startIndex = m_currentLoopIndex;
+        dub.m_isVintage = false; // Will be set on finish
 
         m_state = LOOPER_STATE_OVERDUBBING;
     }
@@ -876,8 +911,17 @@ private:
         if (m_state != LOOPER_STATE_OVERDUBBING)
             return;
 
-        m_state = LOOPER_STATE_PLAYING;
+        // Safety check for zero-length dubs
         Dub& dub = m_dubs[m_nrOfDubs];
+        if (dub.m_length == 0)
+        {
+            // Remove undo stack entry if overdub is zero-length (cleanup)
+            if (!m_undoStack.empty()) m_undoStack.pop_back();
+            m_state = LOOPER_STATE_PLAYING;
+            return;
+        }
+
+        m_state = LOOPER_STATE_PLAYING;
 
         // Store undo information
         m_undoLength = dub.m_length;
@@ -900,6 +944,10 @@ private:
             }
         }
 
+        // Mark this dub as vintage if needed
+        bool vintage = (m_vintageModeToggle && *m_vintageModeToggle > 0.5f);
+        dub.m_isVintage = vintage;
+
         // Activate the overdub
         m_nrOfDubs++;
         m_maxUsedDubs = m_nrOfDubs;
@@ -912,15 +960,12 @@ private:
             return;
 
         // Pop the last state from the undo stack
-        size_t prevNrOfDubs = m_undoStack.back().first;
-        size_t prevNrOfUsedSamples = m_undoStack.back().second;
+        UndoState state = m_undoStack.back();
         m_undoStack.pop_back();
 
-        // Restore the previous state
-        m_nrOfDubs = prevNrOfDubs;
-        m_nrOfUsedSamples = prevNrOfUsedSamples;
+        m_nrOfDubs = state.nrOfDubs;
+        m_nrOfUsedSamples = state.nrOfUsedSamples;
 
-        // If we've undone all overdubs, go back to playing state
         if (m_nrOfDubs > 0)
         {
             m_state = LOOPER_STATE_PLAYING;
@@ -941,7 +986,7 @@ private:
 
         // Restore the stack
         m_undoStack.push_back({m_nrOfDubs, m_nrOfUsedSamples});
-        
+
         // Reactivate the overdub
         Dub& dub = m_dubs[m_nrOfDubs];
         m_nrOfUsedSamples = dub.m_storageOffset + dub.m_length;
