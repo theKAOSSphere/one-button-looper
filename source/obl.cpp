@@ -678,8 +678,7 @@ private:
                 if (m_state != LOOPER_STATE_EMPTY && m_state != LOOPER_STATE_STOPPED)
                 {
                     if (m_state == LOOPER_STATE_RECORDING) finishRecording();
-                    else if (m_state == LOOPER_STATE_OVERDUBBING) finishOverdubbing();
-                    
+                    else if (m_state == LOOPER_STATE_OVERDUBBING) cancelOverdubbing(); // FIX: Cancel accidental overdub on Stop
                     // Go to STOPPED if we have a loop, EMPTY if not
                     m_state = (m_nrOfDubs > 0) ? LOOPER_STATE_STOPPED : LOOPER_STATE_EMPTY;
                     m_currentLoopIndex = 0;
@@ -698,22 +697,25 @@ private:
                 }
                 else 
                 {
-                    // 1. Check if we need to Revert a tap action
                     bool didRevert = false;
-                    
+                    // SCENARIO 1: We were Playing, Press started Overdub, then we Held.
+                    // We want to Cancel the accidental overdub AND execute the Undo.
                     if (m_preHoldState == LOOPER_STATE_PLAYING && m_state == LOOPER_STATE_OVERDUBBING)
                     {
                         cancelOverdubbing();
-                        didRevert = true;
+                        // FALLTHROUGH: Do NOT set didRevert = true.
+                        // Continue downwards to execute the actual Undo command.
                     }
+                    // SCENARIO 2: We were Overdubbing, Press finished it, then we Held.
+                    // We want to Undo the dub we just finished.
                     else if (m_preHoldState == LOOPER_STATE_OVERDUBBING && m_state == LOOPER_STATE_PLAYING)
                     {
                         undoLastOverdub();
                         didRevert = true;
                     }
 
-                    // 2. Only Toggle Undo if we DIDN'T just revert a tap
-                    // (This prevents the "Double Undo" bug safely)
+                    // The actual Undo/Redo Toggle Logic
+                    // This runs if we are in a stable state OR if we just "fell through" from Scenario 1.
                     if (!didRevert)
                     {
                         if (!m_undoToggled)
@@ -911,11 +913,13 @@ private:
         if (m_state != LOOPER_STATE_OVERDUBBING)
             return;
 
-        // Safety check for zero-length dubs
+        // FIX: Discard "Double Tap Artifacts" (Tiny Dubs)
         Dub& dub = m_dubs[m_nrOfDubs];
-        if (dub.m_length == 0)
+        // Threshold: 0.25s (approx 12,000 samples at 48kHz)
+        size_t minSamples = static_cast<size_t>(0.25 * m_sampleRate);
+        if (dub.m_length < minSamples)
         {
-            // Remove undo stack entry if overdub is zero-length (cleanup)
+            // Remove undo stack entry if overdub is zero-length or tiny (cleanup)
             if (!m_undoStack.empty()) m_undoStack.pop_back();
             m_state = LOOPER_STATE_PLAYING;
             return;
