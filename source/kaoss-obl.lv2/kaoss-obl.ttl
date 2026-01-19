@@ -44,6 +44,7 @@ Usage:
 • Adjust the "Loop Gain" knob to control the volume level of the looped audio. Available range from muted to +12dB with halfway position being unity gain.
 • Turning the "Continuous Dub" on allows for overdubbing continuously without needing to press the button again.
 • "Looper Mode" switch to toggle between Digital and Vintage looper modes. Vintage mode adds a bit of warmth and character to the looped audio. Labelled as "Vintage" on the MODGUI.
+• "Undo Mode" toggles between "Undo/Redo" and "Infinite Undo" modes. In "Undo/Redo" mode, pressing and holding the button once will undo the last overdub, and pressing and holding again will redo it. In "Infinite Undo" mode, you can keep pressing and holding the button to step back through all your overdubs one by one.
 	""";
 	
 	lv2:port [

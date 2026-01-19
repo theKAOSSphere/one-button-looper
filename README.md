@@ -19,6 +19,7 @@ Forked from the original [Loopor](https://github.com/stevie67/loopor), this plug
 - **Dry amount control** to blend live input with looped audio.
 - **High overdub capacity** and seamless loop end (no clicks).
 - **Loop gain control** to control the volume level of the looped audio.
+- **Undo Mode selection** to choose between Undo/Redo and Infinite Undo modes.
 
 ---
 
@@ -37,6 +38,9 @@ Forked from the original [Loopor](https://github.com/stevie67/loopor), this plug
 - **Looper Mode** — Switch between Digital (pristine copies) and Vintage (tape emulation).
   * **Digital:** Overdubs are perfect digital copies added on top.
   * **Vintage:** Simulates a tape machine with "punch-in" recording. New layers mask the old ones while recording, and feedback processing (filtering/fading) creates evolving textures that degrade over time.
+- **Undo Mode** — Switch between "Undo/Redo" and "Infinite Undo" modes.
+  * **Undo/Redo:** Standard Ditto-style behaviour where holding the footswitch during playback undoes and redoes the previous layer.
+  * **Infinite Undo:** In this mode, the dubs are progressively removed until only the first dub remains.
 
 ---
 
