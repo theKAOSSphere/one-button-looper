@@ -2,7 +2,7 @@
 
 **A simple stereo looper designed for single-button operation as an LV2 plugin, optimized for the MOD Audio platform.**
 
-Forked from the original [Loopor](https://github.com/stevie67/loopor), this plugin has been modified for simpler operation, inspired by the simple single-button operation of loopers such as the TC Electronic Ditto and the Boss RC-1. It provides a single-footswitch workflow with stereo I/O and configurable controls for threshold, dry mix, overdubs and loop gain. It also features a big display showing the looper's internal state for easy operation.
+Forked from the original [Loopor](https://github.com/stevie67/loopor), this plugin has been modified to mimic the simple single-button operation of loopers such as the TC Electronic Ditto and the Boss RC-1. It provides a single-footswitch workflow with stereo I/O and configurable controls for threshold, dry mix, overdubs, loop gain, and a toggle for operation mode. It also features a big display showing the looper's internal state for easy operation.
 
 <p align="center">
   <img src="source/kaoss-obl.lv2/modgui/screenshot-obl.png" alt="One-Button Looper screenshot" width="200" />
@@ -14,6 +14,7 @@ Forked from the original [Loopor](https://github.com/stevie67/loopor), this plug
 - **Stereo inputs and outputs** (In1/2 → Out1/2).
 - **Single-button Ditto-style operation**: record, overdub, stop, undo/redo, clear.
 - **Large colour display** showing the internal state of the looper and the number of layers for simplified operation.
+- **Dual Mode Operation**: Choose between Digital and Vintage operation modes. Digital mode keeps audio quality pristine, whereas Vintage mode emulates tape generational loss. Each overdub darkens and reduces the volume of the previous layers.
 - **Configurable input threshold** to auto-start recording on signal presence.
 - **Dry amount control** to blend live input with looped audio.
 - **High overdub capacity** and seamless loop end (no clicks).
@@ -29,10 +30,13 @@ Forked from the original [Loopor](https://github.com/stevie67/loopor), this plug
   * Press Once (during playback): Starts overdubbing. This allows you to layer additional parts over the original loop.
   * Press Twice (quickly): Stops playback or recording.
   * Press and Hold: Clears the loop when playback is stopped.
-  * Undo/Redo: While overdubbing, pressing and holding the footswitch undoes the last overdub. Pressing and holding again restores the overdub (redo).  
+  * Undo/Redo: While playing or overdubbing, pressing and holding the footswitch undoes the last overdub. Pressing and holding again restores the overdub (redo).  
 - **Dry Amount** — Mix original input with output (0 = only looped audio).  
 - **Continuous Dub** — Toggle to enable/disable continuous overdubbing.
 - **Loop Gain** – Control the volume level of the looped audio. Available range from muted to +12dB with halfway position being unity gain.
+- **Looper Mode** — Switch between Digital (pristine copies) and Vintage (tape emulation).
+  * **Digital:** Overdubs are perfect digital copies added on top.
+  * **Vintage:** Simulates a tape machine with "punch-in" recording. New layers mask the old ones while recording, and feedback processing (filtering/fading) creates evolving textures that degrade over time.
 
 ---
 
