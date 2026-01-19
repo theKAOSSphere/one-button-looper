@@ -176,6 +176,11 @@ struct UndoState
 {
     size_t nrOfDubs;
     size_t nrOfUsedSamples;
+    // Save the dub metadata that might be overwritten by a new overdub
+    size_t dubStorageOffset;
+    size_t dubLength;
+    size_t dubStartIndex;
+    bool dubIsVintage;
 };
 
 ///
@@ -433,27 +438,22 @@ public:
 
                     if (m_state == LOOPER_STATE_OVERDUBBING)
                     {
-                        // --- VINTAGE MODE FEEDBACK PATH (FIXED) ---
-                        // Previously read from m_storage1[m_nrOfUsedSamples] which was WRONG (empty memory)
-                        // Now we read from currentLoopSum which is the actual playback audio
-                        float oldL = currentLoopSum1;
-                        float oldR = currentLoopSum2;
-
-                        // Apply vintage processing if enabled
                         if (vintageMode)
                         {
+                            // --- VINTAGE MODE FEEDBACK PATH ---
+                            float oldL = currentLoopSum1;
+                            float oldR = currentLoopSum2;
                             // 1. Filter the old sound to make it darker (like old tape)
                             oldL = onePoleLPF(oldL, m_lpfStateL, filterAlpha);
                             oldR = onePoleLPF(oldR, m_lpfStateR, filterAlpha);
-                            
                             // 2. Make the old sound a little quieter (feedback/decay)
                             oldL *= feedbackValue;
                             oldR *= feedbackValue;
+                            // 3. Mix: (Old faded loop) + (Fresh input)
+                            writeL = oldL + in1;
+                            writeR = oldR + in2;
                         }
-
-                        // 3. Mix: (Old faded loop) + (Fresh input)
-                        writeL = oldL + in1;
-                        writeR = oldR + in2;
+                        // else: In normal mode, do NOT mix in old audio; just record the new input
                     }
                     // else: For initial recording, just use input (no feedback, no filter)
 
@@ -712,6 +712,8 @@ private:
                     {
                         undoLastOverdub();
                         didRevert = true;
+                        // FIX: We must flag that an Undo happened, so the NEXT hold triggers a Redo.
+                        m_undoToggled = true;
                     }
 
                     // The actual Undo/Redo Toggle Logic
@@ -757,18 +759,26 @@ private:
     {
         if (m_state != LOOPER_STATE_OVERDUBBING) return;
         
-        // Pop the undo stack entry we just pushed
+        // Pop the undo stack entry we just pushed and RESTORE the dub metadata
+        // This is critical: startOverdubbing() may have overwritten an undone dub's
+        // data, so we need to restore it for redo to work.
         if (!m_undoStack.empty())
         {
             UndoState state = m_undoStack.back();
             m_nrOfUsedSamples = state.nrOfUsedSamples;
+            
+            // Restore the dub metadata that was overwritten
+            Dub& dub = m_dubs[m_nrOfDubs];
+            dub.m_storageOffset = state.dubStorageOffset;
+            dub.m_length = state.dubLength;
+            dub.m_startIndex = state.dubStartIndex;
+            dub.m_isVintage = state.dubIsVintage;
+            
             m_undoStack.pop_back();
         }
         
-        // Reset the current dub's length
-        Dub& dub = m_dubs[m_nrOfDubs];
-        dub.m_length = 0;
-        
+        // FIX: Restore ability to Undo/Redo if we have valid dubs
+        if (m_nrOfDubs > 0) m_canUndo = true;
         m_state = LOOPER_STATE_PLAYING;
     }
 
@@ -834,11 +844,22 @@ private:
         if (m_nrOfUsedSamples >= m_storageSize)
             return;
 
-        // CAPTURE STATE FOR UNDO
-        m_undoStack.push_back({m_nrOfDubs, m_nrOfUsedSamples});
+        // CAPTURE STATE FOR UNDO (including the dub metadata we're about to overwrite)
+        // This is critical for redo to work - if we cancel this overdub, we need to
+        // restore the original dub data that might have been there from a previous undo.
+        Dub& existingDub = m_dubs[m_nrOfDubs];
+        m_undoStack.push_back({
+            m_nrOfDubs,
+            m_nrOfUsedSamples,
+            existingDub.m_storageOffset,
+            existingDub.m_length,
+            existingDub.m_startIndex,
+            existingDub.m_isVintage
+        });
 
-        // Reset undo toggle when beginning a new overdub session
-        m_undoToggled = false;
+        // NOTE: Do NOT reset m_undoToggled here!
+        // The toggle must persist so that hold-to-undo/redo works correctly.
+        // It was being reset on every press, breaking the redo functionality.
 
         // Store current state for undo
         m_undoStorageOffset = m_nrOfUsedSamples;
@@ -914,14 +935,14 @@ private:
             return;
 
         // FIX: Discard "Double Tap Artifacts" (Tiny Dubs)
+        // If dub is tiny, treat it exactly like a Cancelled Overdub.
+        // This ensures metadata is restored so Redo doesn't break.
         Dub& dub = m_dubs[m_nrOfDubs];
         // Threshold: 0.25s (approx 12,000 samples at 48kHz)
         size_t minSamples = static_cast<size_t>(0.25 * m_sampleRate);
         if (dub.m_length < minSamples)
         {
-            // Remove undo stack entry if overdub is zero-length or tiny (cleanup)
-            if (!m_undoStack.empty()) m_undoStack.pop_back();
-            m_state = LOOPER_STATE_PLAYING;
+            cancelOverdubbing();
             return;
         }
 
@@ -985,11 +1006,21 @@ private:
     /// Redo the last overdub
     void redoLastOverdub()
     {
-        if (!m_canUndo || m_nrOfDubs >= m_maxUsedDubs)
+        // FIX: Removed legacy "!m_canUndo" check. We only care about dub count.
+        // If m_nrOfDubs < m_maxUsedDubs, there are inactive dubs to restore.
+        if (m_nrOfDubs >= m_maxUsedDubs)
             return;
 
-        // Restore the stack
-        m_undoStack.push_back({m_nrOfDubs, m_nrOfUsedSamples});
+        // Save current state to undo stack (with full dub metadata for consistency)
+        Dub& existingDub = m_dubs[m_nrOfDubs];
+        m_undoStack.push_back({
+            m_nrOfDubs,
+            m_nrOfUsedSamples,
+            existingDub.m_storageOffset,
+            existingDub.m_length,
+            existingDub.m_startIndex,
+            existingDub.m_isVintage
+        });
 
         // Reactivate the overdub
         Dub& dub = m_dubs[m_nrOfDubs];
