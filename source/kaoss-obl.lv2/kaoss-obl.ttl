@@ -143,4 +143,15 @@ Usage:
 		lv2:portProperty lv2:integer, lv2:enumeration;
     	lv2:scalePoint [ rdfs:label "Digital"; rdf:value 0 ];
     	lv2:scalePoint [ rdfs:label "Vintage"; rdf:value 1 ];
+	] , [
+		a lv2:InputPort, lv2:ControlPort;
+		lv2:index 12;
+		lv2:symbol "undo_mode";
+		lv2:name "Undo Mode";
+		lv2:default 0;
+		lv2:minimum 0;
+		lv2:maximum 1;
+		lv2:portProperty lv2:integer, lv2:enumeration;
+    	lv2:scalePoint [ rdfs:label "Undo/Redo"; rdf:value 0 ];
+    	lv2:scalePoint [ rdfs:label "Infinite Undo"; rdf:value 1 ];
 	] .

@@ -52,7 +52,7 @@ static const size_t NR_OF_BLEND_SAMPLES = 64;
 /// Time threshold for double click detection (in seconds)
 static const double DOUBLE_CLICK_TIME = 0.3;
 /// Time threshold for hold detection (in seconds)
-static const double HOLD_TIME = 1.5;
+static const double HOLD_TIME = 1.0;
 
 ///
 /// Convert an input parameter expressed as db into a linear float value
@@ -157,7 +157,9 @@ enum PortIndex
     /// Global gain applied to looped (recorded) audio
     LOOPER_LOOP_GAIN = 10,
     /// Toggle for looper mode (Normal / Vintage)
-    LOOPER_MODE_VINTAGE = 11
+    LOOPER_MODE_VINTAGE = 11,
+    /// Toggle for selecting Undo mode
+    LOOPER_UNDO_MODE = 12
 };
 
 ///
@@ -329,6 +331,7 @@ public:
             case LOOPER_CONTINUOUS_DUB: m_continuousDubParameter = (const float*)data; return;
             case LOOPER_LOOP_GAIN: m_loopGainParameter = (const float*)data; return;
             case LOOPER_MODE_VINTAGE: m_vintageModeToggle = (const float*)data; return;
+            case LOOPER_UNDO_MODE: m_undoModeToggle = (const float*)data; return;
             case LOOPER_STATE_OUTPUT: m_stateOutput = (float*)data; return;
             case LOOPER_DUB_COUNT_OUTPUT: m_dubCountOutput = (float*)data; return;
             default: break;
@@ -552,6 +555,9 @@ private:
     /// Vintage mode toggle button
     const float* m_vintageModeToggle = NULL;
 
+    /// Looper Undo mode toggle button
+    const float* m_undoModeToggle = NULL;
+
     //
     // All audio inputs
     //
@@ -720,18 +726,31 @@ private:
                     // This runs if we are in a stable state OR if we just "fell through" from Scenario 1.
                     if (!didRevert)
                     {
-                        if (!m_undoToggled)
+                        bool undoMode = (m_undoModeToggle != NULL && *m_undoModeToggle > 0.5f);
+                        if (undoMode)
                         {
+                            // INFINITE UNDO MODE: Hold always undoes dubs
                             if (!m_undoStack.empty())
                             {
                                 undoLastOverdub();
-                                m_undoToggled = true;
                             }
                         }
                         else
                         {
-                            redoLastOverdub();
-                            m_undoToggled = false;
+                            // TOGGLE MODE: Hold toggles between Undo and Redo
+                            if (!m_undoToggled)
+                            {
+                                if (!m_undoStack.empty())
+                                {
+                                    undoLastOverdub();
+                                    m_undoToggled = true;
+                                }
+                            }
+                            else
+                            {
+                                redoLastOverdub();
+                                m_undoToggled = false;
+                            }
                         }
                     }
                 }
