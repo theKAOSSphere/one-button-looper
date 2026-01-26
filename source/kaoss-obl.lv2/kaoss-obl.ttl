@@ -129,7 +129,7 @@ Usage:
         lv2:minimum 0.0;
         lv2:maximum 1.0;
         lv2:scalePoint [ rdfs:label "-inf";  rdf:value 0.0 ];
-        lv2:scalePoint [ rdfs:label "-45dB"; rdf:value 0.25 ];
+        lv2:scalePoint [ rdfs:label "-12dB"; rdf:value 0.25 ];
         lv2:scalePoint [ rdfs:label "0dB";   rdf:value 0.5 ];
         lv2:scalePoint [ rdfs:label "+6dB";  rdf:value 0.75 ];
         lv2:scalePoint [ rdfs:label "+12dB"; rdf:value 1.0 ];

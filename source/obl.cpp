@@ -73,9 +73,9 @@ static float loopGainCurve(float value)
         return 0.0f;
     else if (value <= 0.5f)
     {
-        // Curve from -90dB up to 0dB
-        float db = -90.0f + (value * 2.0f * 90.0f);
-        return dbToFloat(db);
+        // Audio taper (square law) from -60dB up to 0dB
+        float t = value * 2.0f;
+        return t * t;
     }
     else 
     {
